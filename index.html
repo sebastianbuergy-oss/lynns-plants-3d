@@ -721,14 +721,18 @@
     return { green: green, other: other };
   }
 
-  var PLANT_MODELS = {
-    bush: 'plantSmall1', fern: 'plantSmall1', flower: 'pottedPlant', palm: 'pottedPlant',
-    blades: 'plantSmall3', trailing: 'plantSmall3', cactus: 'plantSmall2',
-    succulent: 'plantSmall2', column: 'plantSmall2'
-  };
+  var PLANT_MODELS = ['pp_bfloqiv5up', 'pp_7ig0hcyft93', 'pp_kgt363wkkd', 'pp_f6gpjbegg0',
+    'pp_8kmkyzaqwjp', 'pp_ouuqhkrsul', 'pp_auhzqhajhd', 'pp_wpqra4ewsx',
+    'pp_e9ortct6js', 'pp_iblx2jz90o'];
+
+  function modelForSpecies(species) {
+    var sum = 0;
+    for (var i = 0; i < species.name.length; i++) sum += species.name.charCodeAt(i);
+    return PLANT_MODELS[sum % PLANT_MODELS.length];
+  }
 
   function dressPlant(group, species) {
-    loadModel(PLANT_MODELS[species.style] || 'plantSmall1').then(function (proto) {
+    loadModel(modelForSpecies(species)).then(function (proto) {
       if (!proto) return;
       var model = proto.clone(true);
       var mats = ownMaterials(model);
@@ -737,8 +741,9 @@
       group.add(model);
       group.userData.foliage = model;
       if (mats.green.length) {
-        group.userData.tintMats = mats.green;
-        mats.green.forEach(function (m) { m.color.copy(group.userData.baseLeaf); });
+        group.userData.tintMats = mats.green.map(function (m) {
+          return { m: m, base: m.color.clone() };
+        });
       }
       if (mats.other.length) group.userData.potMats = mats.other;
     });
@@ -946,7 +951,7 @@
     markShadow(g);
     g.userData.foliage = foliage;
     g.userData.leafMat = mat;
-    g.userData.tintMats = [mat];
+    g.userData.tintMats = [{ m: mat, base: new THREE.Color(species.leaf) }];
     g.userData.baseLeaf = new THREE.Color(species.leaf);
     g.userData.potMat = potMat;
     g.userData.potMats = [potMat];
@@ -2962,7 +2967,7 @@
   function killPlant(plant) {
     var info = plant.userData.pick;
     info.dead = true;
-    plant.userData.tintMats.forEach(function (m) { m.color.copy(DEAD_COLOUR); });
+    plant.userData.tintMats.forEach(function (t) { t.m.color.copy(DEAD_COLOUR); });
     var foliage = plant.userData.foliage;
     if (foliage) {
       foliage.scale.set(0.86, 0.48, 0.86);
@@ -2989,8 +2994,8 @@
 
       // Colour and droop track thirst, so a dry shelf is readable at a glance.
       var thirst = 1 - Math.min(1, info.water / 0.35);
-      plant.userData.tintMats.forEach(function (m) {
-        m.color.copy(plant.userData.baseLeaf).lerp(DRY_COLOUR, thirst * 0.8);
+      plant.userData.tintMats.forEach(function (t) {
+        t.m.color.copy(t.base).lerp(DRY_COLOUR, thirst * 0.8);
       });
       if (plant.userData.foliage && !plant.userData.pop) {
         plant.userData.foliage.rotation.z = thirst * 0.13;
