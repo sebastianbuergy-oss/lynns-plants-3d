@@ -490,15 +490,23 @@
     var c = document.createElement('canvas');
     c.width = c.height = 256;
     var g = c.getContext('2d');
-    g.fillStyle = '#425f3a';
-    g.fillRect(0, 0, 256, 256);
-    for (var i = 0; i < 1400; i++) {
-      g.fillStyle = 'rgba(255,255,255,' + (Math.random() * 0.055) + ')';
+    // Four by four tiles with their own shade, so a repeating texture stops
+    // reading as one flat sheet.
+    var shades = ['#47643d', '#425f3a', '#4b6942', '#3e5a37'];
+    var step = 64;
+    for (var ty = 0; ty < 4; ty++) {
+      for (var tx = 0; tx < 4; tx++) {
+        g.fillStyle = shades[(tx * 3 + ty * 5) % shades.length];
+        g.fillRect(tx * step, ty * step, step, step);
+        g.strokeStyle = 'rgba(30,48,28,.85)';
+        g.lineWidth = 3;
+        g.strokeRect(tx * step + 1.5, ty * step + 1.5, step - 3, step - 3);
+      }
+    }
+    for (var i = 0; i < 2600; i++) {
+      g.fillStyle = 'rgba(255,255,255,' + (Math.random() * 0.05) + ')';
       g.fillRect(Math.random() * 256, Math.random() * 256, 2, 2);
     }
-    g.strokeStyle = '#2c4527';
-    g.lineWidth = 8;
-    g.strokeRect(0, 0, 256, 256);
     var t = new THREE.CanvasTexture(c);
     t.wrapS = t.wrapT = THREE.RepeatWrapping;
     t.encoding = THREE.sRGBEncoding;
@@ -539,7 +547,7 @@
   var ROOM_D = 9;
 
   var floorTex = tileTexture();
-  floorTex.repeat.set(ROOM_W * 1.7, ROOM_D * 1.7);
+  floorTex.repeat.set(ROOM_W * 0.42, ROOM_D * 0.42);
   var floor = new THREE.Mesh(
     new THREE.PlaneGeometry(ROOM_W, ROOM_D),
     new THREE.MeshStandardMaterial({ map: floorTex, roughness: 0.72, metalness: 0.04 })
@@ -600,14 +608,39 @@
   }
 
   // pavement outside the open sides, so the box reads as a shop, not a stage
+  // Turning the camera past a wall used to reveal a huge pale plane. The
+  // ground outside is darker now and a hedge closes the view off.
   var pavement = new THREE.Mesh(
-    new THREE.PlaneGeometry(30, 30),
-    new THREE.MeshStandardMaterial({ color: '#6c6a5e', roughness: 1 })
+    new THREE.PlaneGeometry(26, 26),
+    new THREE.MeshStandardMaterial({ color: '#4a5340', roughness: 1 })
   );
   pavement.rotation.x = -Math.PI / 2;
   pavement.position.y = -0.06;
   pavement.receiveShadow = true;
   scene.add(pavement);
+
+  var hedgeMat = new THREE.MeshStandardMaterial({ color: '#2c4a2b', roughness: 0.9 });
+  var hedgeGeo = new THREE.BoxGeometry(1.5, 1.5, 1.5);
+  for (var hx = -8; hx <= 8; hx += 1.35) {
+    for (var side = 0; side < 2; side++) {
+      var z = side ? ROOM_D / 2 + 7.4 : -ROOM_D / 2 - 3.4;
+      var bushA = new THREE.Mesh(hedgeGeo, hedgeMat);
+      bushA.position.set(hx + (Math.random() - 0.5) * 0.3, 0.55 + Math.random() * 0.25, z);
+      bushA.rotation.y = Math.random();
+      bushA.castShadow = bushA.receiveShadow = true;
+      scene.add(bushA);
+    }
+  }
+  for (var hz = -ROOM_D / 2 - 3; hz <= ROOM_D / 2 + 7; hz += 1.35) {
+    for (var wall = 0; wall < 2; wall++) {
+      var x = wall ? ROOM_W / 2 + 3.2 : -ROOM_W / 2 - 3.2;
+      var bushB = new THREE.Mesh(hedgeGeo, hedgeMat);
+      bushB.position.set(x, 0.55 + Math.random() * 0.25, hz + (Math.random() - 0.5) * 0.3);
+      bushB.rotation.y = Math.random();
+      bushB.castShadow = bushB.receiveShadow = true;
+      scene.add(bushB);
+    }
+  }
 
   // A faint darkening at the edges stands in for the shading a real corner
   // collects. Cheap, and it stops the floor reading as a flat sheet.
@@ -715,6 +748,36 @@
   }
 
   // Swaps the placeholder geometry of a finished group for a real model.
+  // A model's shelves never sit where the placeholder's did, so every slot is
+  // dropped onto the model and lands on the first surface it meets.
+  var slotRay = new THREE.Raycaster();
+  var slotDown = new THREE.Vector3(0, -1, 0);
+  var slotFrom = new THREE.Vector3();
+
+  function alignSlots(unit, model) {
+    if (!unit || !unit.slots) return;
+    var group = unit.group;
+    var wasVisible = group.visible;
+    var wasScale = group.scale.x;
+    group.visible = true;
+    group.scale.setScalar(1);
+    group.updateWorldMatrix(true, true);
+
+    unit.slots.forEach(function (slot) {
+      slotFrom.set(slot.x, 3.4, slot.z);
+      group.localToWorld(slotFrom);
+      slotRay.set(slotFrom, slotDown);
+      var hits = slotRay.intersectObject(model, true);
+      if (!hits.length) return;
+      var local = group.worldToLocal(hits[0].point.clone());
+      slot.y = local.y + 0.012;
+      if (slot.plant) slot.plant.position.y = slot.y;
+    });
+
+    group.visible = wasVisible;
+    group.scale.setScalar(wasScale);
+  }
+
   function dressGroup(group, name, target, axis, after) {
     loadModel(name).then(function (proto) {
       if (!proto) return;
@@ -1099,11 +1162,15 @@
   var shelfE = buildShelf(-1.2, -1.6, 0, 'Pflanztisch', { boards: [0.4, 0.86], width: 1.6, depth: 0.62, perBoard: 3 });
 
   // The shop starts nearly bare on purpose: growth has to be visible.
-  dressGroup(shelfA.group, 'bookcaseOpen', 1.86, 'height');
-  dressGroup(shelfB.group, 'bookcaseClosedWide', 1.86, 'height');
-  dressGroup(shelfC.group, 'bookcaseOpen', 2.14, 'height');
-  dressGroup(shelfD.group, 'bookcaseOpenLow', 1.86, 'height');
-  dressGroup(shelfE.group, 'desk', 0.88, 'height');
+  function dressUnit(unit, name, target, axis) {
+    dressGroup(unit.group, name, target, axis, function (model) { alignSlots(unit, model); });
+  }
+
+  dressUnit(shelfA, 'bookcaseOpen', 1.86, 'height');
+  dressUnit(shelfB, 'bookcaseClosedWide', 1.86, 'height');
+  dressUnit(shelfC, 'bookcaseOpen', 2.14, 'height');
+  dressUnit(shelfD, 'bookcaseOpenLow', 1.86, 'height');
+  dressUnit(shelfE, 'desk', 0.88, 'height');
 
   [shelfA, shelfB, shelfC, shelfD, shelfE].forEach(function (unit) {
     unit.group.visible = false;
@@ -1242,12 +1309,13 @@
   table.position.set(1.1, 0, 0.5);
   markShadow(table);
   scene.add(table);
-  dressGroup(table, 'table', 0.78, 'height');
+  var tablePending = 'table';
   var tableUnit = registerSurface(table, 'Mitteltisch', [
     { tier: 0, x: -0.5, y: 0.83, z: 0, plant: null },
     { tier: 0, x: 0.1, y: 0.83, z: -0.2, plant: null },
     { tier: 0, x: 0.6, y: 0.83, z: 0.14, plant: null }
   ], 1.6, 1.2);
+  dressUnit(tableUnit, tablePending, 0.78, 'height');
 
   // a rug gives the floor a focal point, like the reference shop
   var rug = new THREE.Mesh(
@@ -1359,7 +1427,7 @@
   ], 1.7, 0.8);
   wallShelfUnit.wall = true;
 
-  dressGroup(bench, 'bench', 0.52, 'height');
+  var benchPending = 'bench';
   var benchUnit = registerSurface(bench, 'Auslage vorne', [
     { tier: 0, x: -1.25, y: 0.565, z: 0, plant: null },
     { tier: 0, x: -0.63, y: 0.565, z: 0, plant: null },
@@ -1367,6 +1435,7 @@
     { tier: 0, x: 0.63, y: 0.565, z: 0, plant: null },
     { tier: 0, x: 1.25, y: 0.565, z: 0, plant: null }
   ], 3.4, 1);
+  dressUnit(benchUnit, benchPending, 0.52, 'height');
 
   // --------------------------------------------------------------- greenery
   // The premises are lush even before a single plant is bought.
