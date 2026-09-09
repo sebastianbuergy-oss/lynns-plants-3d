@@ -1,0 +1,2945 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Lynn's Plants">
+<meta name="theme-color" content="#22351f">
+<meta name="robots" content="noindex">
+<title>Lynn's Plants 3D</title>
+<style>
+  html,body{margin:0;padding:0}
+  img{max-width:100%}
+  [hidden]{display:none!important}
+</style>
+</head>
+<body>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,700&family=Nunito+Sans:wght@400;600;800&display=swap">
+<style>
+  :root{
+    --moss:#3f5c3a;
+    --moss-deep:#22351f;
+    --bark:#4a3628;
+    --wood:#a97c4c;
+    --terracotta:#c4744a;
+    --cream:#f4ecda;
+    --cream-dim:#ded4bf;
+    --ink:#1b2a1d;
+    --ink-soft:#4e6350;
+    --glow:#ffd98a;
+    --display:"Fraunces",Georgia,"Times New Roman",serif;
+    --ui:"Nunito Sans",-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+  }
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  html,body{height:100%}
+  body{
+    margin:0;
+    background:var(--moss-deep);
+    color:var(--ink);
+    font-family:var(--ui);
+    overflow:hidden;
+    touch-action:none;
+    overscroll-behavior:none;
+  }
+  #stage{position:fixed;inset:0}
+  canvas{display:block;width:100%;height:100%}
+  /* Warm grade and vignette: the cheapest way to turn a lit room into a mood. */
+  #grade{
+    position:fixed;inset:0;
+    pointer-events:none;
+    background:radial-gradient(115% 92% at 50% 40%, rgba(0,0,0,0) 52%, rgba(6,14,8,.34) 100%);
+  }
+
+  .hud{
+    position:fixed;
+    top:0;left:0;right:0;
+    display:flex;
+    align-items:flex-start;
+    justify-content:space-between;
+    gap:12px;
+    padding:calc(10px + env(safe-area-inset-top)) calc(14px + env(safe-area-inset-right)) 10px calc(14px + env(safe-area-inset-left));
+    pointer-events:none;
+  }
+  .mark{
+    display:flex;flex-direction:column;line-height:1;
+    text-shadow:0 2px 10px rgba(10,22,12,.65);
+  }
+  .mark b{
+    font-family:var(--display);
+    font-weight:700;
+    font-size:20px;
+    color:var(--cream);
+    letter-spacing:.01em;
+  }
+  .mark span{
+    margin-top:5px;
+    font-size:8px;
+    font-weight:800;
+    letter-spacing:.34em;
+    color:var(--cream-dim);
+  }
+  .coins{
+    pointer-events:auto;
+    display:flex;align-items:center;gap:7px;
+    height:34px;padding:0 13px;
+    border-radius:17px;
+    background:rgba(20,38,24,.82);
+    border:1px solid rgba(244,236,218,.18);
+    color:var(--cream);
+    font-weight:800;font-size:13px;
+    font-variant-numeric:tabular-nums;
+    backdrop-filter:blur(8px);
+  }
+  .coins{border:1px solid rgba(244,236,218,.18);cursor:pointer;font-family:inherit}
+  .coins i{
+    width:15px;height:15px;border-radius:50%;
+    background:radial-gradient(circle at 35% 30%,#ffe9a8,#e0aa46);
+    box-shadow:inset 0 0 0 1px rgba(90,60,10,.35);
+  }
+  .coins em{
+    width:19px;height:19px;margin-left:2px;
+    border-radius:50%;
+    background:rgba(244,236,218,.16);
+    display:grid;place-items:center;
+    font-style:normal;font-size:13px;font-weight:800;line-height:1;
+  }
+  .coins:focus-visible{outline:2px solid var(--cream);outline-offset:2px}
+
+  .prompt{
+    position:fixed;
+    left:50%;
+    top:calc(58px + env(safe-area-inset-top));
+    transform:translateX(-50%);
+    max-width:min(520px,calc(100vw - 32px));
+    padding:9px 16px;
+    border-radius:18px;
+    background:rgba(20,38,24,.8);
+    border:1px solid rgba(244,236,218,.16);
+    color:var(--cream);
+    font-size:12px;
+    font-weight:600;
+    text-align:center;
+    backdrop-filter:blur(8px);
+    transition:opacity .3s ease;
+    pointer-events:none;
+  }
+
+  .tray{
+    position:fixed;
+    left:50%;
+    bottom:calc(16px + env(safe-area-inset-bottom));
+    transform:translateX(-50%) translateY(14px);
+    display:flex;
+    align-items:center;
+    gap:10px;
+    padding:8px 10px;
+    border-radius:16px;
+    background:rgba(244,236,218,.95);
+    border:1px solid rgba(27,42,29,.14);
+    box-shadow:0 14px 34px rgba(8,20,10,.42);
+    opacity:0;
+    pointer-events:none;
+    transition:opacity .22s ease,transform .22s ease;
+    max-width:calc(100vw - 24px);
+  }
+  .tray.on{opacity:1;transform:translateX(-50%) translateY(0);pointer-events:auto}
+  .tray .who{display:flex;flex-direction:column;gap:2px;min-width:0;padding-left:4px}
+  .tray .who b{
+    font-family:var(--display);
+    font-weight:700;
+    font-size:14px;
+    white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+  }
+  .tray .who span{font-size:9px;font-weight:700;letter-spacing:.12em;color:var(--ink-soft);text-transform:uppercase}
+  .meter{width:74px;display:flex;flex-direction:column;gap:4px}
+  .meter span{font-size:9px;font-weight:800;color:var(--ink-soft);letter-spacing:.04em}
+  .meter i{display:block;height:5px;border-radius:3px;background:rgba(27,42,29,.14);overflow:hidden}
+  .meter i em{display:block;height:100%;width:0;border-radius:3px;background:#4d9ac4;transition:width .5s ease}
+  .tray button{
+    border:0;
+    font:inherit;
+    display:flex;flex-direction:column;align-items:center;gap:2px;
+    width:56px;padding:7px 4px;
+    border-radius:11px;
+    background:rgba(63,92,58,.12);
+    color:var(--ink);
+    font-size:9px;font-weight:800;
+    cursor:pointer;
+  }
+  .tray button:active{background:rgba(63,92,58,.24)}
+  .tray button:focus-visible{outline:2px solid var(--moss);outline-offset:2px}
+  .tray button u{font-size:15px;text-decoration:none;line-height:1}
+  .tray button:disabled{opacity:.38;cursor:default}
+  .tray button.danger{background:rgba(168,78,70,.14);color:#8a3f37}
+  .tray button.hidden{display:none}
+  .tray .who span.warn{color:#a8623a}
+  .tray .who span.dead{color:#8a3f37}
+
+  .back{
+    position:fixed;
+    top:calc(54px + env(safe-area-inset-top));
+    left:calc(14px + env(safe-area-inset-left));
+    display:flex;align-items:center;gap:6px;
+    height:34px;padding:0 14px;
+    border:1px solid rgba(244,236,218,.2);
+    border-radius:17px;
+    background:rgba(20,38,24,.82);
+    color:var(--cream);
+    font:inherit;font-size:12px;font-weight:700;
+    backdrop-filter:blur(8px);
+    cursor:pointer;
+    opacity:0;pointer-events:none;
+    transition:opacity .22s ease;
+  }
+  .back.on{opacity:1;pointer-events:auto}
+  .move{
+    position:fixed;
+    top:calc(96px + env(safe-area-inset-top));
+    left:calc(14px + env(safe-area-inset-left));
+    height:34px;padding:0 14px;
+    border:1px solid rgba(244,236,218,.2);
+    border-radius:17px;
+    background:rgba(20,38,24,.82);
+    color:var(--cream);
+    font:inherit;font-size:12px;font-weight:700;
+    backdrop-filter:blur(8px);cursor:pointer;
+    opacity:0;pointer-events:none;
+    transition:opacity .22s ease;
+  }
+  .move.on{opacity:1;pointer-events:auto}
+  .move:focus-visible{outline:2px solid var(--cream);outline-offset:2px}
+
+  .place-bar{
+    position:fixed;
+    left:50%;
+    bottom:calc(16px + env(safe-area-inset-bottom));
+    transform:translateX(-50%) translateY(14px);
+    display:flex;align-items:center;gap:8px;
+    padding:8px 10px;
+    border-radius:16px;
+    background:rgba(244,236,218,.95);
+    border:1px solid rgba(27,42,29,.14);
+    box-shadow:0 14px 34px rgba(8,20,10,.42);
+    opacity:0;pointer-events:none;
+    transition:opacity .22s ease,transform .22s ease;
+    max-width:calc(100vw - 24px);
+  }
+  .place-bar.on{opacity:1;transform:translateX(-50%) translateY(0);pointer-events:auto}
+  .place-bar span{font-size:11px;font-weight:700;color:var(--ink-soft);padding-left:5px}
+  @media (max-width:560px){
+    .place-bar span{display:none}
+    .place-bar button{padding:10px 14px}
+  }
+  .place-bar button{
+    border:0;font:inherit;flex:0 0 auto;
+    padding:9px 12px;border-radius:11px;
+    background:rgba(63,92,58,.12);color:var(--ink);
+    font-size:11px;font-weight:800;cursor:pointer;
+  }
+  .place-bar button.ok{background:var(--moss);color:var(--cream)}
+  .place-bar button:disabled{opacity:.4;cursor:default}
+  .place-bar button:focus-visible{outline:2px solid var(--moss);outline-offset:2px}
+  .back:focus-visible{outline:2px solid var(--cream);outline-offset:2px}
+
+  .build{
+    position:fixed;
+    right:calc(14px + env(safe-area-inset-right));
+    top:calc(54px + env(safe-area-inset-top));
+    display:flex;flex-direction:column;align-items:flex-end;gap:3px;
+    padding:9px 14px;
+    border:1px solid rgba(244,236,218,.2);
+    border-radius:13px;
+    background:rgba(20,38,24,.82);
+    color:var(--cream);
+    font:inherit;
+    text-align:right;
+    backdrop-filter:blur(8px);
+    cursor:pointer;
+    transition:opacity .22s ease;
+  }
+  .build b{font-size:12px;font-weight:800}
+  .build span{font-size:10px;font-weight:600;color:var(--cream-dim);font-variant-numeric:tabular-nums}
+  .build[disabled]{opacity:.42;cursor:default}
+  .build.gone{opacity:0;pointer-events:none}
+  .build:focus-visible{outline:2px solid var(--cream);outline-offset:2px}
+
+  .sheet[hidden]{display:none}
+  .sheet{
+    position:fixed;inset:0;
+    display:grid;place-items:center;
+    padding:16px;
+    background:rgba(10,20,12,.58);
+    backdrop-filter:blur(4px);
+    z-index:30;
+  }
+  .sheet-card{
+    width:min(420px,100%);
+    padding:16px 16px 12px;
+    border-radius:18px;
+    background:var(--cream);
+    box-shadow:0 22px 50px rgba(6,16,8,.5);
+  }
+  .sheet-card b{font-family:var(--display);font-weight:700;font-size:18px;display:block}
+  .sheet-card p{margin:3px 0 12px;font-size:11px;color:var(--ink-soft)}
+  .pot-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+  .pot-choice{
+    border:1px solid rgba(27,42,29,.14);
+    border-radius:12px;
+    background:rgba(255,255,255,.5);
+    padding:11px 7px 9px;
+    display:flex;flex-direction:column;align-items:center;gap:5px;
+    font:inherit;color:var(--ink);cursor:pointer;
+  }
+  .pot-choice i{
+    width:30px;height:26px;
+    clip-path:polygon(6% 0,94% 0,77% 100%,23% 100%);
+  }
+  .pot-choice b{font-size:11px;font-family:var(--ui);font-weight:800}
+  .pot-choice span{font-size:9px;font-weight:700;color:var(--ink-soft);font-variant-numeric:tabular-nums}
+  .pot-choice:disabled{opacity:.4;cursor:default}
+  .pot-choice:focus-visible{outline:2px solid var(--moss);outline-offset:2px}
+  .sheet-close{
+    width:100%;margin-top:11px;padding:10px;
+    border:0;border-radius:11px;
+    background:rgba(63,92,58,.12);
+    font:inherit;font-size:11px;font-weight:800;color:var(--ink);cursor:pointer;
+  }
+
+  .sheet-card.wide{width:min(520px,100%)}
+  .shop-head{display:flex;align-items:flex-start;justify-content:space-between;gap:12px}
+  .shop-purse{
+    display:flex;align-items:center;gap:6px;
+    height:30px;padding:0 11px;border-radius:15px;
+    background:rgba(63,92,58,.14);
+    font-weight:800;font-size:13px;font-variant-numeric:tabular-nums;
+  }
+  .shop-purse i{
+    width:14px;height:14px;border-radius:50%;
+    background:radial-gradient(circle at 35% 30%,#ffe9a8,#e0aa46);
+  }
+  .tabs{display:flex;gap:5px;margin:12px 0 10px;overflow-x:auto}
+  .tabs button{
+    flex:0 0 auto;border:0;font:inherit;
+    padding:7px 12px;border-radius:10px;
+    background:rgba(63,92,58,.1);color:var(--ink-soft);
+    font-size:11px;font-weight:800;cursor:pointer;
+  }
+  .tabs button.on{background:var(--moss);color:var(--cream)}
+  .tabs button:focus-visible{outline:2px solid var(--moss);outline-offset:2px}
+  .shop-list{display:flex;flex-direction:column;gap:7px;max-height:46vh;overflow-y:auto}
+  .chips{display:flex;gap:5px;overflow-x:auto;padding-bottom:3px;flex:0 0 auto}
+  .chips button{
+    flex:0 0 auto;border:0;font:inherit;
+    padding:6px 11px;border-radius:9px;
+    background:rgba(63,92,58,.1);color:var(--ink-soft);
+    font-size:10px;font-weight:800;cursor:pointer;white-space:nowrap;
+  }
+  .chips button.on{background:var(--moss);color:var(--cream)}
+  .chips button:focus-visible{outline:2px solid var(--moss);outline-offset:2px}
+  .offer{
+    display:flex;align-items:center;gap:11px;
+    padding:10px 11px;
+    border:1px solid rgba(27,42,29,.13);
+    border-radius:12px;
+    background:rgba(255,255,255,.5);
+  }
+  .offer img{
+    flex:0 0 52px;width:52px;height:52px;border-radius:10px;
+    background:linear-gradient(160deg,#eef2e4,#dfe6d2);
+    border:1px solid rgba(27,42,29,.1);
+    object-fit:cover;
+  }
+  .offer i{
+    flex:0 0 52px;height:52px;border-radius:10px;
+    display:grid;place-items:center;font-size:20px;font-style:normal;
+    background:linear-gradient(160deg,#eef2e4,#dfe6d2);
+  }
+  .offer div{flex:1;min-width:0;display:flex;flex-direction:column;gap:2px}
+  .offer b{font-size:12px}
+  .offer small{font-size:10px;color:var(--ink-soft);line-height:1.35}
+  .offer button{
+    flex:0 0 auto;border:0;font:inherit;
+    padding:8px 12px;border-radius:10px;
+    background:var(--moss);color:var(--cream);
+    font-size:11px;font-weight:800;cursor:pointer;
+    font-variant-numeric:tabular-nums;
+  }
+  .offer button:disabled{background:rgba(63,92,58,.16);color:var(--ink-soft);cursor:default}
+  .offer button:focus-visible{outline:2px solid var(--moss);outline-offset:2px}
+  .offer.demo{border-style:dashed}
+  .demo-note{
+    margin:0 0 9px;padding:8px 10px;border-radius:10px;
+    background:rgba(196,116,74,.14);
+    color:#8a4f2c;font-size:10px;font-weight:700;line-height:1.4;
+  }
+
+  .boot{
+    position:fixed;inset:0;
+    display:grid;place-content:center;
+    gap:10px;
+    text-align:center;
+    background:var(--moss-deep);
+    color:var(--cream);
+    transition:opacity .5s ease;
+  }
+  .boot b{font-family:var(--display);font-weight:700;font-size:22px}
+  .boot span{font-size:11px;color:var(--cream-dim);letter-spacing:.06em}
+  .boot.gone{opacity:0;pointer-events:none}
+
+  @media (prefers-reduced-motion:reduce){
+    .tray,.back,.build,.prompt,.boot{transition:none}
+  }
+</style>
+
+<div id="stage"><canvas id="scene"></canvas><div id="grade"></div></div>
+
+<header class="hud">
+  <div class="mark"><b>Lynn's Plants</b><span>3D PROTOTYP</span></div>
+  <button class="coins" id="coinBtn" type="button"><i></i><b id="coinValue">1000</b><em>+</em></button>
+</header>
+
+<button class="back" id="backBtn" type="button">← Ganzer Laden</button>
+<button class="move" id="moveBtn" type="button">✥ Verschieben</button>
+
+<div class="place-bar" id="placeBar">
+  <span id="placeHint">Boden antippen, um hinzustellen</span>
+  <button type="button" id="placeTurn">↻ Drehen</button>
+  <button type="button" id="placeOk" class="ok">✓ Hinstellen</button>
+  <button type="button" id="placeCancel">✕</button>
+</div>
+
+<div class="prompt" id="prompt">Der Laden ist leer. Tippe den Computer auf der Theke an und bestelle – geliefert wird in die Ecke hinten links.</div>
+
+<div class="tray" id="tray">
+  <div class="who"><b id="pickName">Calathea</b><span id="pickSlot">Regal 1 · oben</span></div>
+  <div class="meter"><span>Wasser <b id="waterValue">40%</b></span><i><em id="waterFill"></em></i></div>
+  <button type="button" id="waterBtn"><u>💧</u>Giessen</button>
+  <button type="button" id="repotBtn"><u>🪴</u>Umtopfen</button>
+  <button type="button" id="shiftBtn"><u>✥</u>Umstellen</button>
+  <button type="button" id="tossBtn" class="danger"><u>♲</u>Entsorgen</button>
+</div>
+
+<div class="sheet" id="shopSheet" hidden>
+  <div class="sheet-card wide">
+    <div class="shop-head">
+      <div>
+        <b>Bestellen</b>
+        <p>Ladencomputer · Lieferung direkt in den Laden</p>
+      </div>
+      <div class="shop-purse"><i></i><b id="shopCoins">1000</b></div>
+    </div>
+    <div class="tabs" id="shopTabs">
+      <button type="button" data-tab="plants" class="on">Pflanzen</button>
+      <button type="button" data-tab="build">Regale &amp; Räume</button>
+      <button type="button" data-tab="decor">Deko</button>
+    </div>
+    <div class="shop-list" id="shopList"></div>
+    <button type="button" class="sheet-close" id="shopClose">Schliessen</button>
+  </div>
+</div>
+
+<div class="sheet" id="storeSheet" hidden>
+  <div class="sheet-card">
+    <b>Münzen &amp; Pakete</b>
+    <p>Wird im fertigen Spiel über den Kaufdialog von Apple abgewickelt.</p>
+    <div class="shop-list" id="storeList"></div>
+    <button type="button" class="sheet-close" id="storeClose">Schliessen</button>
+  </div>
+</div>
+
+<div class="sheet" id="potSheet" hidden>
+  <div class="sheet-card">
+    <b>Topf auswählen</b>
+    <p id="potFor">Für die ausgewählte Pflanze</p>
+    <div class="pot-grid" id="potGrid"></div>
+    <button type="button" class="sheet-close" id="potClose">Abbrechen</button>
+  </div>
+</div>
+
+<div class="boot" id="boot"><b>Lynn's Plants</b><span>Der Laden wird aufgebaut …</span></div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js" crossorigin="anonymous"></script>
+<script>
+(function () {
+  'use strict';
+
+  var canvas = document.getElementById('scene');
+  var renderer = new THREE.WebGLRenderer({ canvas: canvas, antialias: true });
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+  renderer.shadowMap.enabled = true;
+  renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+  renderer.outputEncoding = THREE.sRGBEncoding;
+  // ACES tone mapping drained the palette; plain output keeps the terracotta
+  // and wood readable, so brightness is controlled with light intensity instead.
+  renderer.toneMapping = THREE.NoToneMapping;
+
+  var scene = new THREE.Scene();
+  scene.background = new THREE.Color('#1d3320');
+  scene.fog = new THREE.Fog('#20361f', 20, 44);
+
+  var camera = new THREE.PerspectiveCamera(34, 1, 0.1, 120);
+
+  // ---------------------------------------------------------------- textures
+  function tileTexture() {
+    var c = document.createElement('canvas');
+    c.width = c.height = 256;
+    var g = c.getContext('2d');
+    g.fillStyle = '#425f3a';
+    g.fillRect(0, 0, 256, 256);
+    for (var i = 0; i < 1400; i++) {
+      g.fillStyle = 'rgba(255,255,255,' + (Math.random() * 0.055) + ')';
+      g.fillRect(Math.random() * 256, Math.random() * 256, 2, 2);
+    }
+    g.strokeStyle = '#2c4527';
+    g.lineWidth = 8;
+    g.strokeRect(0, 0, 256, 256);
+    var t = new THREE.CanvasTexture(c);
+    t.wrapS = t.wrapT = THREE.RepeatWrapping;
+    t.encoding = THREE.sRGBEncoding;
+    return t;
+  }
+
+  function plankTexture(base, grain) {
+    var c = document.createElement('canvas');
+    c.width = c.height = 256;
+    var g = c.getContext('2d');
+    g.fillStyle = base;
+    g.fillRect(0, 0, 256, 256);
+    for (var p = 0; p < 4; p++) {
+      g.strokeStyle = grain;
+      g.lineWidth = 3;
+      g.beginPath();
+      g.moveTo(p * 64, 0);
+      g.lineTo(p * 64, 256);
+      g.stroke();
+      for (var k = 0; k < 7; k++) {
+        g.strokeStyle = 'rgba(0,0,0,' + (0.03 + Math.random() * 0.05) + ')';
+        g.lineWidth = 1 + Math.random();
+        g.beginPath();
+        var y = Math.random() * 256;
+        g.moveTo(p * 64 + 4, y);
+        g.bezierCurveTo(p * 64 + 20, y + 8, p * 64 + 40, y - 8, p * 64 + 60, y + 3);
+        g.stroke();
+      }
+    }
+    var t = new THREE.CanvasTexture(c);
+    t.wrapS = t.wrapT = THREE.RepeatWrapping;
+    t.encoding = THREE.sRGBEncoding;
+    return t;
+  }
+
+  // ------------------------------------------------------------------- room
+  var ROOM_W = 11;
+  var ROOM_D = 9;
+
+  var floorTex = tileTexture();
+  floorTex.repeat.set(ROOM_W * 1.7, ROOM_D * 1.7);
+  var floor = new THREE.Mesh(
+    new THREE.PlaneGeometry(ROOM_W, ROOM_D),
+    new THREE.MeshStandardMaterial({ map: floorTex, roughness: 0.92 })
+  );
+  floor.rotation.x = -Math.PI / 2;
+  floor.receiveShadow = true;
+  floor.name = 'floor';
+  scene.add(floor);
+
+  var WALL_H = 3.3;
+  var skirtMat = new THREE.MeshStandardMaterial({ color: '#25391f', roughness: 0.85 });
+  var walls = [];
+
+  // Every wall faces inward and is dropped as soon as the camera moves behind
+  // it, so the shop can be turned a full circle and always stays readable.
+  function makeWall(cx, cz, rotY, span, nx, nz, repeatX) {
+    var group = new THREE.Group();
+    var tex = plankTexture('#2f4a2b', 'rgba(18,32,16,.6)');
+    tex.repeat.set(repeatX, 1.5);
+    var mesh = new THREE.Mesh(
+      new THREE.PlaneGeometry(span, WALL_H),
+      new THREE.MeshStandardMaterial({ map: tex, roughness: 0.95 })
+    );
+    mesh.position.set(cx, WALL_H / 2, cz);
+    mesh.rotation.y = rotY;
+    mesh.receiveShadow = true;
+    group.add(mesh);
+
+    var skirt = new THREE.Mesh(
+      new THREE.BoxGeometry(Math.abs(nx) > 0.5 ? 0.14 : span, 0.36, Math.abs(nz) > 0.5 ? 0.14 : span),
+      skirtMat
+    );
+    skirt.position.set(cx - nx * 0.07, 0.18, cz - nz * 0.07);
+    skirt.castShadow = skirt.receiveShadow = true;
+    group.add(skirt);
+
+    scene.add(group);
+    walls.push({
+      group: group,
+      centre: new THREE.Vector3(cx, WALL_H / 2, cz),
+      normal: new THREE.Vector3(nx, 0, nz)
+    });
+    return group;
+  }
+
+  var wallBack = makeWall(0, -ROOM_D / 2, 0, ROOM_W, 0, -1, 6);
+  var wallFront = makeWall(0, ROOM_D / 2, Math.PI, ROOM_W, 0, 1, 6);
+  var wallLeft = makeWall(-ROOM_W / 2, 0, Math.PI / 2, ROOM_D, -1, 0, 5);
+  var wallRight = makeWall(ROOM_W / 2, 0, -Math.PI / 2, ROOM_D, 1, 0, 5);
+
+  var wallProbe = new THREE.Vector3();
+  function updateWalls() {
+    for (var i = 0; i < walls.length; i++) {
+      var w = walls[i];
+      wallProbe.copy(camera.position).sub(w.centre);
+      w.group.visible = wallProbe.dot(w.normal) < 0.2;
+    }
+  }
+
+  // pavement outside the open sides, so the box reads as a shop, not a stage
+  var pavement = new THREE.Mesh(
+    new THREE.PlaneGeometry(30, 30),
+    new THREE.MeshStandardMaterial({ color: '#6c6a5e', roughness: 1 })
+  );
+  pavement.rotation.x = -Math.PI / 2;
+  pavement.position.y = -0.06;
+  pavement.receiveShadow = true;
+  scene.add(pavement);
+
+  // ------------------------------------------------------------------ light
+  // Kept deliberately low: fill light this strong washes out the very contact
+  // shadows the prototype exists to demonstrate.
+  scene.add(new THREE.HemisphereLight('#9dc0d4', '#2f3f24', 0.5));
+
+  var sun = new THREE.DirectionalLight('#ffe6bc', 1.45);
+  sun.position.set(7.5, 9.5, 5);
+  sun.castShadow = true;
+  sun.shadow.mapSize.set(2048, 2048);
+  sun.shadow.camera.left = -11;
+  sun.shadow.camera.right = 11;
+  sun.shadow.camera.top = 11;
+  sun.shadow.camera.bottom = -11;
+  sun.shadow.camera.near = 1;
+  sun.shadow.camera.far = 34;
+  sun.shadow.bias = -0.0007;
+  sun.shadow.normalBias = 0.02;
+  scene.add(sun);
+
+  var lamp = new THREE.PointLight('#ffb765', 0.6, 10, 2);
+  lamp.position.set(-3.4, 2.8, -3.1);
+  scene.add(lamp);
+
+  var counterGlow = new THREE.PointLight('#ffc98a', 0.35, 6, 2);
+  counterGlow.position.set(-3.1, 2.1, 2.2);
+  scene.add(counterGlow);
+
+  // ----------------------------------------------------------------- pieces
+  var woodMat = new THREE.MeshStandardMaterial({ color: '#b47c42', roughness: 0.72 });
+  var darkMat = new THREE.MeshStandardMaterial({ color: '#2b2723', roughness: 0.6 });
+  var frameWood = new THREE.MeshStandardMaterial({ color: '#7a5533', roughness: 0.8 });
+  var potMats = [
+    new THREE.MeshStandardMaterial({ color: '#cd6a36', roughness: 0.8 }),
+    new THREE.MeshStandardMaterial({ color: '#e0bd8e', roughness: 0.75 }),
+    new THREE.MeshStandardMaterial({ color: '#7d9a7a', roughness: 0.8 }),
+    new THREE.MeshStandardMaterial({ color: '#a86a8f', roughness: 0.8 })
+  ];
+  var soilMat = new THREE.MeshStandardMaterial({ color: '#3d2c20', roughness: 1 });
+
+  var leafGeo = new THREE.SphereGeometry(1, 10, 7);
+  var bladeGeo = new THREE.ConeGeometry(1, 1, 6);
+
+  function markShadow(obj) {
+    obj.traverse(function (n) {
+      if (n.isMesh) { n.castShadow = true; n.receiveShadow = true; }
+    });
+  }
+
+  var PLANT_GROUPS = [
+    {
+      id: 'green', name: 'Grünpflanzen', species: [
+        { name: 'Calathea', leaf: '#4f8b50', style: 'bush', price: 46 },
+        { name: 'Monstera', leaf: '#2f6b3d', style: 'bush', price: 55 },
+        { name: 'Gummibaum', leaf: '#2f5d3a', style: 'bush', price: 62 },
+        { name: 'Zimmerlinde', leaf: '#5c9a55', style: 'bush', price: 40 },
+        { name: 'Schwertfarn', leaf: '#4e8f57', style: 'fern', price: 38 },
+        { name: 'Pfeilblatt', leaf: '#3d7d47', style: 'bush', price: 52 }
+      ]
+    },
+    {
+      id: 'bloom', name: 'Blühend', species: [
+        { name: 'Friedenslilie', leaf: '#5aa06a', style: 'flower', price: 60 },
+        { name: 'Usambaraveilchen', leaf: '#7a5f9a', style: 'flower', price: 28 },
+        { name: 'Orchidee', leaf: '#8fb98a', style: 'flower', price: 74 },
+        { name: 'Anthurie', leaf: '#3f7a45', style: 'flower', price: 66 },
+        { name: 'Begonie', leaf: '#6e9a4e', style: 'flower', price: 32 }
+      ]
+    },
+    {
+      id: 'succ', name: 'Kakteen & Sukkulenten', species: [
+        { name: 'Goldkugelkaktus', leaf: '#5d8f5f', style: 'cactus', price: 30 },
+        { name: 'Säulenkaktus', leaf: '#4f8352', style: 'column', price: 44 },
+        { name: 'Echeveria', leaf: '#7fa87d', style: 'succulent', price: 26 },
+        { name: 'Haworthia', leaf: '#6d9a6a', style: 'succulent', price: 22 },
+        { name: 'Aloe', leaf: '#6f9a63', style: 'blades', price: 34 }
+      ]
+    },
+    {
+      id: 'big', name: 'Grosse Pflanzen', species: [
+        { name: 'Bogenhanf', leaf: '#6d9153', style: 'blades', price: 34 },
+        { name: 'Geigenfeige', leaf: '#2c6338', style: 'bush', price: 88 },
+        { name: 'Zimmerpalme', leaf: '#3f7d4a', style: 'palm', price: 78 },
+        { name: 'Drachenbaum', leaf: '#57944f', style: 'palm', price: 64 }
+      ]
+    },
+    {
+      id: 'hang', name: 'Hängend', species: [
+        { name: 'Efeutute', leaf: '#61a14b', style: 'trailing', price: 35 },
+        { name: 'Perlenkette', leaf: '#7fae76', style: 'trailing', price: 30 },
+        { name: 'Efeu', leaf: '#4a8a46', style: 'trailing', price: 27 },
+        { name: 'Grünlilie', leaf: '#6bab5c', style: 'trailing', price: 24 }
+      ]
+    }
+  ];
+
+  var SPECIES = [];
+  PLANT_GROUPS.forEach(function (group) {
+    group.species.forEach(function (item) {
+      item.group = group.id;
+      SPECIES.push(item);
+    });
+  });
+
+  var PLANT_PACKS = [
+    { id: 'starter', name: 'Starter-Set Grün', pick: ['Calathea', 'Zimmerlinde', 'Schwertfarn', 'Pfeilblatt'], note: 'Vier robuste Grünpflanzen für den Anfang.' },
+    { id: 'bloom', name: 'Blüten-Sortiment', pick: ['Friedenslilie', 'Begonie', 'Usambaraveilchen'], note: 'Drei blühende Sorten für die Auslage.' },
+    { id: 'desert', name: 'Wüsten-Kiste', pick: ['Goldkugelkaktus', 'Echeveria', 'Haworthia', 'Aloe'], note: 'Vier pflegeleichte Sukkulenten.' },
+    { id: 'statement', name: 'Solitär-Paket', pick: ['Geigenfeige', 'Zimmerpalme', 'Drachenbaum'], note: 'Drei grosse Blickfänger.' }
+  ];
+
+  function speciesByName(name) {
+    for (var i = 0; i < SPECIES.length; i++) if (SPECIES[i].name === name) return SPECIES[i];
+    return SPECIES[0];
+  }
+
+  function buildPlant(species, scale) {
+    var g = new THREE.Group();
+    var potMat = potMats[Math.floor(Math.random() * potMats.length)].clone();
+
+    var pot = new THREE.Mesh(new THREE.CylinderGeometry(0.15, 0.11, 0.2, 14), potMat);
+    pot.position.y = 0.1;
+    g.add(pot);
+
+    var rim = new THREE.Mesh(new THREE.CylinderGeometry(0.163, 0.163, 0.035, 14), potMat);
+    rim.position.y = 0.198;
+    g.add(rim);
+
+    var soil = new THREE.Mesh(new THREE.CylinderGeometry(0.142, 0.142, 0.03, 12), soilMat);
+    soil.position.y = 0.205;
+    g.add(soil);
+
+    var foliage = new THREE.Group();
+    foliage.position.y = 0.21;
+    var mat = new THREE.MeshStandardMaterial({ color: species.leaf, roughness: 0.66 });
+
+    if (species.style === 'blades') {
+      for (var b = 0; b < 6; b++) {
+        var blade = new THREE.Mesh(bladeGeo, mat);
+        blade.scale.set(0.05, 0.52 + Math.random() * 0.2, 0.05);
+        blade.position.set((Math.random() - 0.5) * 0.11, blade.scale.y / 2, (Math.random() - 0.5) * 0.11);
+        blade.rotation.z = (Math.random() - 0.5) * 0.4;
+        blade.rotation.x = (Math.random() - 0.5) * 0.3;
+        foliage.add(blade);
+      }
+    } else if (species.style === 'cactus') {
+      var body = new THREE.Mesh(new THREE.SphereGeometry(0.13, 12, 10), mat);
+      body.scale.y = 1.25;
+      body.position.y = 0.15;
+      foliage.add(body);
+    } else if (species.style === 'column') {
+      for (var col = 0; col < 3; col++) {
+        var stem = new THREE.Mesh(new THREE.CylinderGeometry(0.052, 0.06, 0.42 + col * 0.12, 8), mat);
+        stem.position.set((col - 1) * 0.085, (0.42 + col * 0.12) / 2, 0);
+        foliage.add(stem);
+      }
+    } else if (species.style === 'succulent') {
+      for (var ring = 0; ring < 12; ring++) {
+        var petal = new THREE.Mesh(leafGeo, mat);
+        var out = 0.03 + (ring % 3) * 0.035;
+        var angle = ring * 0.72;
+        petal.scale.set(0.07, 0.028, 0.05);
+        petal.position.set(Math.cos(angle) * out, 0.05 + (ring % 3) * 0.02, Math.sin(angle) * out);
+        petal.rotation.set(-0.5 + (ring % 3) * 0.16, -angle, 0);
+        foliage.add(petal);
+      }
+    } else if (species.style === 'fern') {
+      for (var frond = 0; frond < 10; frond++) {
+        var arc = new THREE.Mesh(bladeGeo, mat);
+        var turn = frond * 0.63;
+        arc.scale.set(0.035, 0.4 + Math.random() * 0.14, 0.035);
+        arc.position.set(Math.cos(turn) * 0.09, 0.22, Math.sin(turn) * 0.09);
+        arc.rotation.set(Math.sin(turn) * 0.6, 0, Math.cos(turn) * -0.6);
+        foliage.add(arc);
+      }
+    } else if (species.style === 'palm') {
+      var trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.035, 0.05, 0.5, 8),
+        new THREE.MeshStandardMaterial({ color: '#7c6242', roughness: 0.9 }));
+      trunk.position.y = 0.25;
+      foliage.add(trunk);
+      for (var fan = 0; fan < 7; fan++) {
+        var frondLeaf = new THREE.Mesh(leafGeo, mat);
+        var spin = fan * (Math.PI * 2 / 7);
+        frondLeaf.scale.set(0.19, 0.035, 0.08);
+        frondLeaf.position.set(Math.cos(spin) * 0.14, 0.52, Math.sin(spin) * 0.14);
+        frondLeaf.rotation.set(0, -spin, -0.35);
+        foliage.add(frondLeaf);
+      }
+    } else if (species.style === 'trailing') {
+      for (var top = 0; top < 4; top++) {
+        var crown = new THREE.Mesh(leafGeo, mat);
+        crown.scale.set(0.1, 0.035, 0.08);
+        crown.position.set((Math.random() - 0.5) * 0.18, 0.1 + Math.random() * 0.07, (Math.random() - 0.5) * 0.18);
+        crown.rotation.set((Math.random() - 0.5) * 0.6, Math.random() * Math.PI, (Math.random() - 0.5) * 0.6);
+        foliage.add(crown);
+      }
+      for (var vine = 0; vine < 10; vine++) {
+        var drop = new THREE.Mesh(leafGeo, mat);
+        var side = vine % 2 ? 1 : -1;
+        drop.scale.set(0.06, 0.025, 0.05);
+        drop.position.set(side * (0.13 + Math.random() * 0.05), -0.02 - vine * 0.026, (Math.random() - 0.5) * 0.16);
+        drop.rotation.set((Math.random() - 0.5) * 0.8, Math.random() * Math.PI, (Math.random() - 0.5) * 0.8);
+        foliage.add(drop);
+      }
+    } else {
+      var count = species.style === 'flower' ? 5 : 7;
+      for (var i = 0; i < count; i++) {
+        var leaf = new THREE.Mesh(leafGeo, mat);
+        var lift = 0.14 + Math.random() * 0.22;
+        leaf.scale.set(0.14 + Math.random() * 0.05, 0.045, 0.11 + Math.random() * 0.05);
+        leaf.position.set((Math.random() - 0.5) * 0.26, lift, (Math.random() - 0.5) * 0.26);
+        leaf.rotation.set((Math.random() - 0.5) * 0.7, Math.random() * Math.PI, (Math.random() - 0.5) * 0.7);
+        foliage.add(leaf);
+      }
+      if (species.style === 'flower') {
+        var petalMat = new THREE.MeshStandardMaterial({ color: '#f3ece0', roughness: 0.5 });
+        for (var f = 0; f < 3; f++) {
+          var petal = new THREE.Mesh(leafGeo, petalMat);
+          petal.scale.set(0.05, 0.09, 0.045);
+          petal.position.set((Math.random() - 0.5) * 0.2, 0.34 + Math.random() * 0.08, (Math.random() - 0.5) * 0.2);
+          foliage.add(petal);
+        }
+      }
+    }
+
+    g.add(foliage);
+    g.scale.setScalar(scale || 1);
+    markShadow(g);
+    g.userData.foliage = foliage;
+    g.userData.leafMat = mat;
+    g.userData.baseLeaf = new THREE.Color(species.leaf);
+    g.userData.potMat = potMat;
+    g.userData.baseScale = scale || 1;
+    return g;
+  }
+
+  // ------------------------------------------------------------------ shelf
+  var shelves = [];
+  var sellables = [];
+
+  // Tables and benches behave like shelves: hidden until bought, then a set of
+  // slots the order terminal can deliver plants into.
+  function registerSurface(group, label, slots, width, depth) {
+    var hit = new THREE.Mesh(
+      new THREE.BoxGeometry(width, 1.5, depth),
+      new THREE.MeshBasicMaterial({ visible: false })
+    );
+    hit.position.y = 0.75;
+    group.add(hit);
+    group.visible = false;
+    group.scale.setScalar(0.01);
+    var unit = { group: group, hit: hit, slots: slots, label: label, built: false };
+    hit.userData.shelf = unit;
+    shelves.push(unit);
+    return unit;
+  }
+
+  function buildShelf(x, z, rotY, label, style) {
+    style = style || {};
+    var unit = new THREE.Group();
+    unit.position.set(x, 0, z);
+    unit.rotation.y = rotY;
+
+    var W = style.width || 1.9;
+    var D = style.depth || 0.46;
+    var boards = style.boards || [0.52, 1.08, 1.64];
+    var perBoard = style.perBoard || 3;
+    var H = boards[boards.length - 1] + 0.22;
+
+    var postGeo = new THREE.BoxGeometry(0.085, H, 0.085);
+    [[-W / 2, -D / 2], [W / 2, -D / 2], [-W / 2, D / 2], [W / 2, D / 2]].forEach(function (p) {
+      var post = new THREE.Mesh(postGeo, frameWood);
+      post.position.set(p[0], H / 2, p[1]);
+      unit.add(post);
+      var foot = new THREE.Mesh(new THREE.BoxGeometry(0.13, 0.05, 0.13), frameWood);
+      foot.position.set(p[0], 0.025, p[1]);
+      unit.add(foot);
+    });
+
+    // cross braces at the back turn four posts into a piece of furniture
+    [0.28, H - 0.12].forEach(function (y) {
+      var brace = new THREE.Mesh(new THREE.BoxGeometry(W - 0.1, 0.05, 0.05), frameWood);
+      brace.position.set(0, y, -D / 2 + 0.04);
+      unit.add(brace);
+    });
+    var spine = new THREE.Mesh(new THREE.BoxGeometry(0.05, H - 0.5, 0.04), frameWood);
+    spine.position.set(0, H / 2, -D / 2 + 0.04);
+    unit.add(spine);
+
+    var slots = [];
+    boards.forEach(function (y, tier) {
+      var board = new THREE.Mesh(new THREE.BoxGeometry(W, 0.06, D), woodMat);
+      board.position.y = y;
+      unit.add(board);
+      var lip = new THREE.Mesh(new THREE.BoxGeometry(W, 0.035, 0.035), woodMat);
+      lip.position.set(0, y + 0.045, D / 2 - 0.02);
+      unit.add(lip);
+      var step = W / (perBoard + 0.4);
+      for (var sIndex = 0; sIndex < perBoard; sIndex++) {
+        slots.push({
+          tier: tier,
+          x: -W / 2 + step * 0.7 + sIndex * step,
+          y: y + 0.03,
+          z: 0,
+          plant: null
+        });
+      }
+    });
+
+    // one invisible box makes the whole unit an easy tap target
+    var hit = new THREE.Mesh(
+      new THREE.BoxGeometry(W + 0.2, H, D + 0.35),
+      new THREE.MeshBasicMaterial({ visible: false })
+    );
+    hit.position.y = H / 2;
+    unit.add(hit);
+
+    markShadow(unit);
+    scene.add(unit);
+
+    var shelf = { group: unit, hit: hit, slots: slots, label: label, built: false };
+    hit.userData.shelf = shelf;
+    shelves.push(shelf);
+    return shelf;
+  }
+
+  function fillSlot(shelf, slot, species) {
+    var plant = buildPlant(species, 1);
+    plant.position.set(slot.x, slot.y, slot.z);
+    shelf.group.add(plant);
+    slot.plant = plant;
+    plant.userData.pick = {
+      species: species,
+      shelf: shelf,
+      slot: slot,
+      water: 0.25 + Math.random() * 0.5
+    };
+    plant.traverse(function (n) { if (n.isMesh) n.userData.owner = plant; });
+    sellables.push(plant);
+    return plant;
+  }
+
+  var shelfA = buildShelf(-2.6, -ROOM_D / 2 + 0.42, 0, 'Regal klein');
+  var shelfB = buildShelf(1.4, -ROOM_D / 2 + 0.42, 0, 'Regal breit', { width: 2.3, perBoard: 4 });
+  var shelfC = buildShelf(-ROOM_W / 2 + 0.42, -0.6, Math.PI / 2, 'Regal hoch',
+    { boards: [0.42, 0.92, 1.42, 1.92], width: 1.7 });
+  var shelfD = buildShelf(3.2, -1.4, 0, 'Eckregal', { width: 1.1, depth: 0.4, perBoard: 2 });
+  var shelfE = buildShelf(-1.2, -1.6, 0, 'Pflanztisch', { boards: [0.4, 0.86], width: 1.6, depth: 0.62, perBoard: 3 });
+
+  // The shop starts nearly bare on purpose: growth has to be visible.
+  [shelfA, shelfB, shelfC, shelfD, shelfE].forEach(function (unit) {
+    unit.group.visible = false;
+    unit.group.scale.setScalar(0.01);
+  });
+
+  // counter
+  var counter = new THREE.Group();
+  var counterTop = new THREE.Mesh(new THREE.BoxGeometry(2.2, 0.12, 0.9), woodMat);
+  counterTop.position.y = 1.02;
+  counter.add(counterTop);
+  var counterBody = new THREE.Mesh(
+    new THREE.BoxGeometry(2.05, 0.98, 0.78),
+    new THREE.MeshStandardMaterial({ color: '#3f5c3a', roughness: 0.85 })
+  );
+  counterBody.position.y = 0.5;
+  counter.add(counterBody);
+  var till = new THREE.Mesh(new THREE.BoxGeometry(0.42, 0.26, 0.34), darkMat);
+  till.position.set(0.55, 1.2, 0);
+  counter.add(till);
+  var deskPc = new THREE.Group();
+  var monitor = new THREE.Mesh(new THREE.BoxGeometry(0.52, 0.36, 0.05), darkMat);
+  monitor.position.y = 0.27;
+  deskPc.add(monitor);
+  var screenGlow = new THREE.Mesh(
+    new THREE.PlaneGeometry(0.45, 0.29),
+    new THREE.MeshBasicMaterial({ color: '#a9dcc6' })
+  );
+  screenGlow.position.set(0, 0.27, 0.027);
+  deskPc.add(screenGlow);
+  var stand = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.07, 0.09, 8), darkMat);
+  stand.position.y = 0.045;
+  deskPc.add(stand);
+  var keyboard = new THREE.Mesh(new THREE.BoxGeometry(0.36, 0.03, 0.14), darkMat);
+  keyboard.position.set(0, 0.015, 0.24);
+  deskPc.add(keyboard);
+  deskPc.position.set(-0.5, 1.08, 0.02);
+  deskPc.traverse(function (n) { if (n.isMesh) n.userData.pc = true; });
+  counter.add(deskPc);
+
+  counter.position.set(-3.1, 0, 2.4);
+  counter.rotation.y = 0.32;
+  markShadow(counter);
+  scene.add(counter);
+
+  // Two boards held by angle brackets. Nothing touches the floor, so this only
+  // makes sense mounted against a wall.
+  var bracketMat = new THREE.MeshStandardMaterial({ color: '#3a332c', roughness: 0.55, metalness: 0.4 });
+
+  function buildWallShelf() {
+    var group = new THREE.Group();
+    [1.02, 1.48].forEach(function (y) {
+      var board = new THREE.Mesh(new THREE.BoxGeometry(1.5, 0.065, 0.32), woodMat);
+      board.position.set(0, y, 0.17);
+      group.add(board);
+      var edge = new THREE.Mesh(new THREE.BoxGeometry(1.5, 0.03, 0.03), woodMat);
+      edge.position.set(0, y + 0.048, 0.325);
+      group.add(edge);
+      [-0.55, 0.55].forEach(function (x) {
+        var upright = new THREE.Mesh(new THREE.BoxGeometry(0.035, 0.2, 0.035), bracketMat);
+        upright.position.set(x, y - 0.13, 0.04);
+        group.add(upright);
+        var arm = new THREE.Mesh(new THREE.BoxGeometry(0.035, 0.035, 0.24), bracketMat);
+        arm.position.set(x, y - 0.045, 0.15);
+        group.add(arm);
+        var stay = new THREE.Mesh(new THREE.BoxGeometry(0.028, 0.028, 0.24), bracketMat);
+        stay.position.set(x, y - 0.115, 0.11);
+        stay.rotation.x = 0.72;
+        group.add(stay);
+      });
+    });
+    markShadow(group);
+    scene.add(group);
+    return group;
+  }
+
+  var wallShelfGroup = buildWallShelf();
+
+  function buildRopeShelf() {
+    var group = new THREE.Group();
+    var ropeMat = new THREE.MeshStandardMaterial({ color: '#b9a074', roughness: 1 });
+    var rail = new THREE.Mesh(new THREE.BoxGeometry(1.34, 0.07, 0.09), frameWood);
+    rail.position.set(0, 2.05, 0.06);
+    group.add(rail);
+    [-0.55, 0.55].forEach(function (x) {
+      var rope = new THREE.Mesh(new THREE.CylinderGeometry(0.016, 0.016, 1.45, 6), ropeMat);
+      rope.position.set(x, 1.33, 0.2);
+      group.add(rope);
+    });
+    [1.28, 0.86].forEach(function (y) {
+      var board = new THREE.Mesh(new THREE.BoxGeometry(1.3, 0.06, 0.3), woodMat);
+      board.position.set(0, y, 0.2);
+      group.add(board);
+    });
+    markShadow(group);
+    scene.add(group);
+    return group;
+  }
+
+  var ropeShelfGroup = buildRopeShelf();
+
+  // -------------------------------------------------------- delivery corner
+  var DELIVERY = { x: -3.9, z: -3.0 };
+  var deliveryMat = new THREE.MeshStandardMaterial({ color: '#5b7a4c', roughness: 1 });
+  var deliveryPad = new THREE.Mesh(new THREE.PlaneGeometry(2.3, 2.1), deliveryMat);
+  deliveryPad.rotation.x = -Math.PI / 2;
+  deliveryPad.position.set(DELIVERY.x, 0.011, DELIVERY.z);
+  deliveryPad.receiveShadow = true;
+  scene.add(deliveryPad);
+
+  var deliverySign = new THREE.Mesh(
+    new THREE.BoxGeometry(0.9, 0.34, 0.05),
+    new THREE.MeshStandardMaterial({ color: '#d9c9a4', roughness: 0.8 })
+  );
+  deliverySign.position.set(DELIVERY.x, 1.5, -ROOM_D / 2 + 0.08);
+  deliverySign.castShadow = true;
+  scene.add(deliverySign);
+
+  var crateMat2 = new THREE.MeshStandardMaterial({ color: '#a4784a', roughness: 0.9 });
+
+  // middle display table
+  var table = new THREE.Group();
+  var top = new THREE.Mesh(new THREE.BoxGeometry(1.7, 0.1, 1.05), woodMat);
+  top.position.y = 0.78;
+  table.add(top);
+  [[-0.75, -0.45], [0.75, -0.45], [-0.75, 0.45], [0.75, 0.45]].forEach(function (p) {
+    var leg = new THREE.Mesh(new THREE.BoxGeometry(0.07, 0.78, 0.07), frameWood);
+    leg.position.set(p[0], 0.39, p[1]);
+    table.add(leg);
+  });
+  table.position.set(1.1, 0, 0.5);
+  markShadow(table);
+  scene.add(table);
+  var tableUnit = registerSurface(table, 'Mitteltisch', [
+    { tier: 0, x: -0.5, y: 0.83, z: 0, plant: null },
+    { tier: 0, x: 0.1, y: 0.83, z: -0.2, plant: null },
+    { tier: 0, x: 0.6, y: 0.83, z: 0.14, plant: null }
+  ], 1.6, 1.2);
+
+  // a rug gives the floor a focal point, like the reference shop
+  var rug = new THREE.Mesh(
+    new THREE.CircleGeometry(1.35, 32),
+    new THREE.MeshStandardMaterial({ color: '#6f8f5f', roughness: 1 })
+  );
+  rug.rotation.x = -Math.PI / 2;
+  rug.position.set(-0.6, 0.012, -1.1);
+  rug.receiveShadow = true;
+  rug.visible = false;
+  scene.add(rug);
+
+  // ------------------------------------------------------------------ decor
+  // Density is what makes the box read as a shop rather than a room.
+  var bigLeaf = new THREE.MeshStandardMaterial({ color: '#3c7a44', roughness: 0.66 });
+
+  function floorPlant(x, z, height) {
+    var g = new THREE.Group();
+    var pot = new THREE.Mesh(new THREE.CylinderGeometry(0.26, 0.19, 0.36, 14), potMats[0]);
+    pot.position.y = 0.18;
+    g.add(pot);
+    var soil = new THREE.Mesh(new THREE.CylinderGeometry(0.24, 0.24, 0.04, 12), soilMat);
+    soil.position.y = 0.36;
+    g.add(soil);
+    for (var i = 0; i < 9; i++) {
+      var leaf = new THREE.Mesh(leafGeo, bigLeaf);
+      var up = 0.42 + Math.random() * height;
+      leaf.scale.set(0.2 + Math.random() * 0.09, 0.055, 0.16 + Math.random() * 0.07);
+      leaf.position.set((Math.random() - 0.5) * 0.5, up, (Math.random() - 0.5) * 0.5);
+      leaf.rotation.set((Math.random() - 0.5) * 0.8, Math.random() * Math.PI, (Math.random() - 0.5) * 0.8);
+      g.add(leaf);
+    }
+    g.position.set(x, 0, z);
+    markShadow(g);
+    scene.add(g);
+  }
+
+
+  function wallArt(x, y, z, rotY, w, h, color, host) {
+    var frame = new THREE.Mesh(
+      new THREE.BoxGeometry(w + 0.08, h + 0.08, 0.05),
+      new THREE.MeshStandardMaterial({ color: '#8a6a45', roughness: 0.7 })
+    );
+    var art = new THREE.Mesh(
+      new THREE.PlaneGeometry(w, h),
+      new THREE.MeshStandardMaterial({ color: color, roughness: 0.9 })
+    );
+    art.position.z = 0.031;
+    frame.add(art);
+    frame.position.set(x, y, z);
+    frame.rotation.y = rotY;
+    frame.castShadow = true;
+    (host || scene).add(frame);
+  }
+
+
+  function hangingPlant(x, z) {
+    var g = new THREE.Group();
+    var cord = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.012, 0.012, 0.7, 5),
+      new THREE.MeshStandardMaterial({ color: '#7d6a4f', roughness: 1 })
+    );
+    cord.position.y = 2.9;
+    g.add(cord);
+    var bowl = new THREE.Mesh(new THREE.SphereGeometry(0.2, 12, 8, 0, Math.PI * 2, 0, Math.PI / 2), potMats[1]);
+    bowl.rotation.x = Math.PI;
+    bowl.position.y = 2.55;
+    g.add(bowl);
+    for (var i = 0; i < 7; i++) {
+      var vine = new THREE.Mesh(leafGeo, bigLeaf);
+      vine.scale.set(0.1, 0.035, 0.09);
+      vine.position.set((Math.random() - 0.5) * 0.42, 2.2 + Math.random() * 0.45, (Math.random() - 0.5) * 0.42);
+      vine.rotation.set((Math.random() - 0.5) * 1, Math.random() * Math.PI, (Math.random() - 0.5) * 1);
+      g.add(vine);
+    }
+    g.position.set(x, 0, z);
+    markShadow(g);
+    scene.add(g);
+  }
+
+
+  // low bench along the open front edge, filled with small pots
+  var bench = new THREE.Group();
+  var benchTop = new THREE.Mesh(new THREE.BoxGeometry(3.2, 0.09, 0.6), woodMat);
+  benchTop.position.y = 0.52;
+  bench.add(benchTop);
+  [-1.45, 1.45].forEach(function (x) {
+    var side = new THREE.Mesh(new THREE.BoxGeometry(0.11, 0.52, 0.55), frameWood);
+    side.position.set(x, 0.26, 0);
+    bench.add(side);
+  });
+  bench.position.set(-1.6, 0, 3.5);
+  markShadow(bench);
+  scene.add(bench);
+  var ropeShelfUnit = registerSurface(ropeShelfGroup, 'Hängeregal', [
+    { tier: 0, x: -0.38, y: 1.32, z: 0.2, plant: null },
+    { tier: 0, x: 0.38, y: 1.32, z: 0.2, plant: null },
+    { tier: 0, x: -0.38, y: 0.9, z: 0.2, plant: null },
+    { tier: 0, x: 0.38, y: 0.9, z: 0.2, plant: null }
+  ], 1.5, 0.8);
+  ropeShelfUnit.wall = true;
+
+  var wallShelfUnit = registerSurface(wallShelfGroup, 'Wandregal', [
+    { tier: 0, x: -0.5, y: 1.515, z: 0.17, plant: null },
+    { tier: 0, x: 0, y: 1.515, z: 0.17, plant: null },
+    { tier: 0, x: 0.5, y: 1.515, z: 0.17, plant: null },
+    { tier: 0, x: -0.5, y: 1.055, z: 0.17, plant: null },
+    { tier: 0, x: 0.5, y: 1.055, z: 0.17, plant: null }
+  ], 1.7, 0.8);
+  wallShelfUnit.wall = true;
+
+  var benchUnit = registerSurface(bench, 'Auslage vorne', [
+    { tier: 0, x: -1.25, y: 0.565, z: 0, plant: null },
+    { tier: 0, x: -0.63, y: 0.565, z: 0, plant: null },
+    { tier: 0, x: 0, y: 0.565, z: 0, plant: null },
+    { tier: 0, x: 0.63, y: 0.565, z: 0, plant: null },
+    { tier: 0, x: 1.25, y: 0.565, z: 0, plant: null }
+  ], 3.4, 1);
+
+  // --------------------------------------------------------------- greenery
+  // The premises are lush even before a single plant is bought.
+  var ivyMat = new THREE.MeshStandardMaterial({ color: '#3d7d43', roughness: 0.72 });
+  var ivyDark = new THREE.MeshStandardMaterial({ color: '#2f6537', roughness: 0.75 });
+
+  // Leaves hug the wall plane: spread runs along the wall, never away from it.
+  function garland(host, ax, az, bx, bz, top, steps) {
+    var alongX = Math.abs(bx - ax) > Math.abs(bz - az);
+    for (var i = 0; i < steps; i++) {
+      var t = i / (steps - 1);
+      var x = ax + (bx - ax) * t;
+      var z = az + (bz - az) * t;
+      var tuft = 4 + Math.floor(Math.random() * 3);
+      for (var k = 0; k < tuft; k++) {
+        var leaf = new THREE.Mesh(leafGeo, k % 2 ? ivyMat : ivyDark);
+        leaf.scale.set(0.07 + Math.random() * 0.045, 0.025, 0.055 + Math.random() * 0.035);
+        var slide = (Math.random() - 0.5) * 0.5;
+        leaf.position.set(
+          x + (alongX ? slide : (Math.random() - 0.5) * 0.07),
+          top - Math.random() * 0.3,
+          z + (alongX ? (Math.random() - 0.5) * 0.07 : slide)
+        );
+        leaf.rotation.set(
+          (Math.random() - 0.5) * 0.7,
+          alongX ? Math.random() * Math.PI : Math.PI / 2 + (Math.random() - 0.5) * 1.2,
+          (Math.random() - 0.5) * 0.7
+        );
+        leaf.castShadow = true;
+        host.add(leaf);
+      }
+    }
+  }
+
+  var trim = WALL_H - 0.12;
+  garland(wallBack, -ROOM_W / 2 + 0.3, -ROOM_D / 2 + 0.22, ROOM_W / 2 - 0.3, -ROOM_D / 2 + 0.22, trim, 16);
+  garland(wallLeft, -ROOM_W / 2 + 0.22, -ROOM_D / 2 + 0.4, -ROOM_W / 2 + 0.22, ROOM_D / 2 - 0.4, trim, 13);
+  garland(wallRight, ROOM_W / 2 - 0.22, -ROOM_D / 2 + 0.4, ROOM_W / 2 - 0.22, ROOM_D / 2 - 0.4, trim, 13);
+  garland(wallFront, -ROOM_W / 2 + 0.3, ROOM_D / 2 - 0.22, ROOM_W / 2 - 0.3, ROOM_D / 2 - 0.22, trim, 16);
+
+  // a living wall behind the counter
+  for (var gw = 0; gw < 320; gw++) {
+    var patch = new THREE.Mesh(leafGeo, gw % 3 ? ivyMat : ivyDark);
+    patch.scale.set(0.075 + Math.random() * 0.04, 0.022, 0.06 + Math.random() * 0.03);
+    patch.position.set(
+      -ROOM_W / 2 + 0.13 + Math.random() * 0.07,
+      0.45 + Math.random() * 2.15,
+      1.15 + Math.random() * 2.7
+    );
+    patch.rotation.set(
+      (Math.random() - 0.5) * 0.6,
+      Math.PI / 2 + (Math.random() - 0.5) * 1.1,
+      (Math.random() - 0.5) * 0.6
+    );
+    patch.castShadow = true;
+    wallLeft.add(patch);
+  }
+
+  // vines dropping from the back wall between the lights
+  for (var vn = 0; vn < 6; vn++) {
+    var anchorX = -ROOM_W / 2 + 1.2 + vn * 1.7;
+    for (var seg = 0; seg < 7; seg++) {
+      var strand = new THREE.Mesh(leafGeo, seg % 2 ? ivyMat : ivyDark);
+      strand.scale.set(0.055, 0.022, 0.048);
+      strand.position.set(
+        anchorX + (Math.random() - 0.5) * 0.14,
+        trim - 0.32 - seg * 0.2,
+        -ROOM_D / 2 + 0.14
+      );
+      strand.rotation.set((Math.random() - 0.5) * 0.6, Math.random() * Math.PI, (Math.random() - 0.5) * 0.6);
+      wallBack.add(strand);
+    }
+  }
+
+  // ------------------------------------------------------------- glasshouse
+  // The room stays open at the top so the camera always sees the whole shop.
+  // String lights hug the back wall instead of crossing the view.
+  var bulbMat = new THREE.MeshBasicMaterial({ color: '#ffdf9e' });
+  for (var sl = 0; sl < 14; sl++) {
+    var t = sl / 13;
+    var bulb = new THREE.Mesh(new THREE.SphereGeometry(0.055, 8, 6), bulbMat);
+    bulb.position.set(
+      -ROOM_W / 2 + 0.7 + t * (ROOM_W - 1.4),
+      WALL_H - 0.34 - Math.sin(t * Math.PI) * 0.18,
+      -ROOM_D / 2 + 0.16
+    );
+    wallBack.add(bulb);
+  }
+
+  // window on the back wall: the source the sunlight appears to come from
+  var paneMat = new THREE.MeshBasicMaterial({ color: '#d8c48c' });
+  var pane = new THREE.Mesh(new THREE.PlaneGeometry(1.9, 1.25), paneMat);
+  pane.position.set(3.4, 1.95, -ROOM_D / 2 + 0.06);
+  wallBack.add(pane);
+  var frameMat = new THREE.MeshStandardMaterial({ color: '#cbb894', roughness: 0.7 });
+  [[0, 0.68, 2.1, 0.11], [0, -0.68, 2.1, 0.11], [-0.99, 0, 0.11, 1.45], [0.99, 0, 0.11, 1.45], [0, 0, 0.07, 1.25]]
+    .forEach(function (b) {
+      var bar = new THREE.Mesh(new THREE.BoxGeometry(b[2], b[3], 0.1), frameMat);
+      bar.position.set(3.4 + b[0], 1.95 + b[1], -ROOM_D / 2 + 0.09);
+      wallBack.add(bar);
+    });
+
+  // crates and a watering can, the clutter that makes a room look worked in
+  var crateMat = new THREE.MeshStandardMaterial({ color: '#8f6a42', roughness: 0.9 });
+  [[-4.3, 1.1, 0.5], [-4.0, 1.7, 0.42], [4.4, 0.4, 0.46]].forEach(function (c) {
+    var crate = new THREE.Mesh(new THREE.BoxGeometry(c[2], c[2] * 0.8, c[2]), crateMat);
+    crate.position.set(c[0], c[2] * 0.4, c[1]);
+    crate.rotation.y = Math.random();
+    crate.castShadow = crate.receiveShadow = true;
+    scene.add(crate);
+  });
+
+  var can = new THREE.Group();
+  var canBody = new THREE.Mesh(new THREE.CylinderGeometry(0.13, 0.115, 0.24, 12),
+    new THREE.MeshStandardMaterial({ color: '#7f9a86', roughness: 0.55, metalness: 0.25 }));
+  canBody.position.y = 0.12;
+  can.add(canBody);
+  var spout = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.045, 0.34, 8),
+    new THREE.MeshStandardMaterial({ color: '#7f9a86', roughness: 0.55, metalness: 0.25 }));
+  spout.position.set(0.17, 0.19, 0);
+  spout.rotation.z = -0.8;
+  can.add(spout);
+  can.position.set(-2.3, 0, 1.6);
+  markShadow(can);
+  scene.add(can);
+
+  // ---------------------------------------------------------------- persons
+  function limb(mat, length, thickness) {
+    var g = new THREE.Group();
+    var m = new THREE.Mesh(new THREE.CylinderGeometry(thickness, thickness * 0.88, length, 8), mat);
+    m.position.y = -length / 2;
+    g.add(m);
+    var cap = new THREE.Mesh(new THREE.SphereGeometry(thickness * 0.95, 8, 6), mat);
+    cap.position.y = -length;
+    g.add(cap);
+    return g;
+  }
+
+  function buildPerson(look) {
+    var skin = new THREE.MeshStandardMaterial({ color: look.skin, roughness: 0.78 });
+    var top = new THREE.MeshStandardMaterial({ color: look.top, roughness: 0.82 });
+    var legMat = new THREE.MeshStandardMaterial({ color: look.legs, roughness: 0.85 });
+    var hairMat = new THREE.MeshStandardMaterial({ color: look.hair, roughness: 0.65 });
+    var shoeMat = new THREE.MeshStandardMaterial({ color: look.shoes, roughness: 0.7 });
+
+    var root = new THREE.Group();
+    var hips = new THREE.Group();
+    hips.position.y = 0.88;
+    root.add(hips);
+
+    var torso = new THREE.Group();
+    hips.add(torso);
+    var chest = new THREE.Mesh(new THREE.CylinderGeometry(0.19, 0.16, 0.56, 10), top);
+    chest.position.y = 0.28;
+    torso.add(chest);
+    var shoulders = new THREE.Mesh(new THREE.SphereGeometry(0.2, 10, 8), top);
+    shoulders.position.y = 0.54;
+    shoulders.scale.set(1, 0.62, 0.82);
+    torso.add(shoulders);
+
+    if (look.inner) {
+      var innerMat = new THREE.MeshStandardMaterial({ color: look.inner, roughness: 0.85 });
+      var placket = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.5, 0.04), innerMat);
+      placket.position.set(0, 0.3, 0.155);
+      torso.add(placket);
+    }
+    if (look.apron) {
+      var apronMat = new THREE.MeshStandardMaterial({ color: look.apron, roughness: 0.9 });
+      var apron = new THREE.Mesh(new THREE.BoxGeometry(0.31, 0.46, 0.05), apronMat);
+      apron.position.set(0, 0.11, 0.16);
+      torso.add(apron);
+      var strap = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.3, 0.04), apronMat);
+      strap.position.set(0.09, 0.44, 0.15);
+      strap.rotation.z = 0.22;
+      torso.add(strap);
+      var strap2 = strap.clone();
+      strap2.position.x = -0.09;
+      strap2.rotation.z = -0.22;
+      torso.add(strap2);
+    }
+
+    var neck = new THREE.Mesh(new THREE.CylinderGeometry(0.055, 0.06, 0.1, 8), skin);
+    neck.position.y = 0.63;
+    torso.add(neck);
+
+    var head = new THREE.Group();
+    head.position.y = 0.68;
+    torso.add(head);
+    var skull = new THREE.Mesh(new THREE.SphereGeometry(0.135, 14, 12), skin);
+    skull.scale.set(0.92, 1.06, 0.95);
+    skull.position.y = 0.11;
+    head.add(skull);
+    var hair = new THREE.Mesh(new THREE.SphereGeometry(0.142, 14, 12), hairMat);
+    hair.scale.set(0.96, 1.02, 0.99);
+    hair.position.y = 0.125;
+    head.add(hair);
+    var face = new THREE.Mesh(new THREE.SphereGeometry(0.118, 12, 10), skin);
+    face.scale.set(0.84, 0.9, 0.6);
+    face.position.set(0, 0.1, 0.07);
+    head.add(face);
+    if (look.bun) {
+      var bun = new THREE.Mesh(new THREE.SphereGeometry(0.072, 10, 8), hairMat);
+      bun.position.set(0, 0.19, -0.11);
+      head.add(bun);
+    } else {
+      var pony = new THREE.Mesh(new THREE.SphereGeometry(0.075, 10, 8), hairMat);
+      pony.scale.set(1, 1.9, 1);
+      pony.position.set(0, 0.02, -0.12);
+      head.add(pony);
+    }
+
+    var arms = [];
+    [-1, 1].forEach(function (side) {
+      var shoulder = new THREE.Group();
+      shoulder.position.set(side * 0.21, 0.5, 0);
+      torso.add(shoulder);
+      var upper = limb(top, 0.26, 0.055);
+      shoulder.add(upper);
+      var elbow = new THREE.Group();
+      elbow.position.y = -0.26;
+      shoulder.add(elbow);
+      var fore = limb(skin, 0.25, 0.048);
+      elbow.add(fore);
+      arms.push({ shoulder: shoulder, elbow: elbow, side: side });
+    });
+
+    var legs = [];
+    [-1, 1].forEach(function (side) {
+      var hip = new THREE.Group();
+      hip.position.set(side * 0.095, 0, 0);
+      hips.add(hip);
+      var thigh = limb(legMat, 0.42, 0.075);
+      hip.add(thigh);
+      var knee = new THREE.Group();
+      knee.position.y = -0.42;
+      hip.add(knee);
+      var shin = limb(legMat, 0.4, 0.06);
+      knee.add(shin);
+      var foot = new THREE.Mesh(new THREE.BoxGeometry(0.11, 0.07, 0.24), shoeMat);
+      foot.position.set(0, -0.42, 0.05);
+      knee.add(foot);
+      legs.push({ hip: hip, knee: knee, side: side });
+    });
+
+    markShadow(root);
+    scene.add(root);
+
+    return {
+      root: root, hips: hips, torso: torso, head: head,
+      arms: arms, legs: legs,
+      hipBase: 0.88,
+      pos: new THREE.Vector2(0, 2),
+      target: null,
+      heading: Math.PI,
+      speed: 0,
+      phase: 0,
+      blend: 0,
+      maxSpeed: look.speed || 1.75,
+      stride: look.stride || 1.42
+    };
+  }
+
+  var lynn = buildPerson({
+    skin: '#e2b391', top: '#4a7346', legs: '#39424d',
+    inner: '#e8e2d2', apron: '#6d5a41',
+    hair: '#2c1f18', shoes: '#5a4130', bun: true, speed: 1.85
+  });
+  lynn.pos.set(-0.4, 1.4);
+  lynn.root.position.set(lynn.pos.x, 0, lynn.pos.y);
+
+  var guest = buildPerson({
+    skin: '#c98d63', top: '#e8e0d0', legs: '#6d84a6',
+    hair: '#6b4028', shoes: '#efe7d8', bun: false, speed: 1.35, stride: 1.34
+  });
+  guest.pos.set(3.6, 3.4);
+  guest.root.position.set(guest.pos.x, 0, guest.pos.y);
+
+  // ------------------------------------------------------------------- cat
+  var cat = new THREE.Group();
+  var catMat = new THREE.MeshStandardMaterial({ color: '#211d1c', roughness: 0.85 });
+  var catBody = new THREE.Mesh(new THREE.SphereGeometry(0.16, 12, 10), catMat);
+  catBody.scale.set(1, 0.95, 1.35);
+  catBody.position.y = 0.17;
+  cat.add(catBody);
+  var catHead = new THREE.Mesh(new THREE.SphereGeometry(0.105, 12, 10), catMat);
+  catHead.position.set(0, 0.35, 0.11);
+  cat.add(catHead);
+  [-1, 1].forEach(function (s) {
+    var ear = new THREE.Mesh(new THREE.ConeGeometry(0.045, 0.09, 5), catMat);
+    ear.position.set(s * 0.055, 0.43, 0.09);
+    cat.add(ear);
+  });
+  var catTail = new THREE.Group();
+  catTail.position.set(0, 0.14, -0.16);
+  cat.add(catTail);
+  var tailMesh = new THREE.Mesh(new THREE.CylinderGeometry(0.028, 0.02, 0.4, 6), catMat);
+  tailMesh.position.y = 0.18;
+  tailMesh.rotation.x = -0.5;
+  catTail.add(tailMesh);
+  cat.position.set(2.2, 0, 2.6);
+  cat.rotation.y = -0.8;
+  markShadow(cat);
+  scene.add(cat);
+
+  // ------------------------------------------------------------ walk system
+  // Only the counter is fixed. Everything else registers its footprint when it
+  // is actually placed, and updates it when it is moved again.
+  var OBSTACLES = [{ x: -3.1, z: 2.4, r: 1.35, active: true }];
+
+  function clampToRoom(x, z) {
+    return {
+      x: Math.max(-ROOM_W / 2 + 0.55, Math.min(ROOM_W / 2 - 0.55, x)),
+      z: Math.max(-ROOM_D / 2 + 0.85, Math.min(outdoor ? ROOM_D / 2 + 4.6 : ROOM_D / 2 - 0.85, z))
+    };
+  }
+
+  function pushOutOfFurniture(p) {
+    for (var i = 0; i < OBSTACLES.length; i++) {
+      var o = OBSTACLES[i];
+      if (o.active === false) continue;
+      var dx = p.x - o.x;
+      var dz = p.z - o.z;
+      var d = Math.hypot(dx, dz);
+      if (d < o.r && d > 0.0001) {
+        p.x = o.x + (dx / d) * o.r;
+        p.z = o.z + (dz / d) * o.r;
+      }
+    }
+    return p;
+  }
+
+  function walkTo(person, x, z) {
+    var p = pushOutOfFurniture(clampToRoom(x, z));
+    person.target = new THREE.Vector2(p.x, p.z);
+  }
+
+  function stepPerson(person, dt) {
+    var moved = 0;
+    if (person.target) {
+      var dx = person.target.x - person.pos.x;
+      var dz = person.target.y - person.pos.y;
+      var dist = Math.hypot(dx, dz);
+      if (dist < 0.06) {
+        person.target = null;
+        person.speed = Math.max(0, person.speed - 7 * dt);
+      } else {
+        var wanted = Math.min(person.maxSpeed, Math.sqrt(Math.max(0, 2 * 5.5 * (dist - 0.05))));
+        person.speed += (wanted - person.speed) * Math.min(1, dt * 6);
+        var heading = Math.atan2(dx, dz);
+        var diff = ((heading - person.heading + Math.PI * 3) % (Math.PI * 2)) - Math.PI;
+        person.heading += diff * Math.min(1, dt * 8);
+        moved = person.speed * dt;
+        person.pos.x += Math.sin(person.heading) * moved;
+        person.pos.y += Math.cos(person.heading) * moved;
+        var fixed = pushOutOfFurniture({ x: person.pos.x, z: person.pos.y });
+        person.pos.set(fixed.x, fixed.z);
+      }
+    } else {
+      person.speed = Math.max(0, person.speed - 6 * dt);
+    }
+
+    // Phase follows distance, not time. That is what stops feet from sliding.
+    person.phase += (moved / person.stride) * Math.PI * 2;
+    var wanting = Math.min(1, person.speed / (person.maxSpeed * 0.55));
+    person.blend += (wanting - person.blend) * Math.min(1, dt * 9);
+
+    person.root.position.set(person.pos.x, 0, person.pos.y);
+    person.root.rotation.y = person.heading;
+
+    var a = person.blend;
+    var ph = person.phase;
+    var breathe = Math.sin(performance.now() / 900) * 0.006 * (1 - a);
+
+    person.legs.forEach(function (leg) {
+      var offset = leg.side < 0 ? 0 : Math.PI;
+      var swing = Math.sin(ph + offset);
+      leg.hip.rotation.x = swing * 0.66 * a;
+      leg.knee.rotation.x = -Math.max(0, Math.sin(ph + offset - 0.85)) * 1.05 * a;
+    });
+
+    person.arms.forEach(function (arm) {
+      var offset = arm.side < 0 ? Math.PI : 0;
+      arm.shoulder.rotation.x = Math.sin(ph + offset) * 0.5 * a;
+      arm.shoulder.rotation.z = arm.side * (0.08 + 0.03 * a);
+      arm.elbow.rotation.x = -(0.18 + Math.max(0, Math.sin(ph + offset)) * 0.42 * a);
+    });
+
+    person.hips.position.y = person.hipBase + Math.abs(Math.sin(ph)) * 0.055 * a + breathe;
+    person.hips.rotation.z = Math.sin(ph) * 0.045 * a;
+    person.hips.rotation.y = Math.sin(ph) * 0.1 * a;
+    person.torso.rotation.y = -Math.sin(ph) * 0.13 * a;
+    person.torso.rotation.x = 0.05 * a;
+    person.head.rotation.y = Math.sin(ph) * 0.05 * a;
+    person.head.rotation.x = -0.04 * a;
+  }
+
+  // guest wanders between a few browsing spots
+  var guestSpots = [
+    { x: -2.2, z: -2.4 }, { x: 1.5, z: -2.3 }, { x: 1.2, z: 1.9 },
+    { x: -2.6, z: 1.4 }, { x: 3.4, z: 3.2 }
+  ];
+  var guestIndex = 0;
+  var guestWait = 1.5;
+
+  var guestWalking = false;
+  var guestScratch = new THREE.Vector3();
+
+  function guestBrowse() {
+    var best = null;
+    var bestDist = 2.1;
+    for (var i = 0; i < sellables.length; i++) {
+      var plant = sellables[i];
+      if (!plant.parent || plant.userData.pick.dead) continue;
+      plant.getWorldPosition(guestScratch);
+      var d = Math.hypot(guestScratch.x - guest.pos.x, guestScratch.z - guest.pos.y);
+      if (d < bestDist) { bestDist = d; best = plant; }
+    }
+    if (best && Math.random() < 0.7) sellToGuest(best);
+  }
+
+  function stepGuest(dt) {
+    if (!guest.target) {
+      if (guestWalking) {
+        guestWalking = false;
+        guestBrowse();
+      }
+      guestWait -= dt;
+      if (guestWait <= 0) {
+        guestIndex = (guestIndex + 1) % guestSpots.length;
+        var spot = guestSpots[guestIndex];
+        walkTo(guest, spot.x, spot.z);
+        guestWalking = true;
+        guestWait = 2.4 + Math.random() * 2.6;
+      }
+    }
+    stepPerson(guest, dt);
+  }
+
+  // ---------------------------------------------------------------- camera
+  // The camera orbits a target instead of sitting at fixed points, so two
+  // fingers can swing the whole shop around without fighting the focus system.
+  var HOME = { yaw: 0.59, pitch: 0.42, dist: 12, target: new THREE.Vector3(-0.5, 1, -0.9) };
+  var orbit = { yaw: HOME.yaw, pitch: HOME.pitch, dist: HOME.dist, target: HOME.target.clone() };
+  var goal = { yaw: HOME.yaw, pitch: HOME.pitch, dist: HOME.dist, target: HOME.target.clone() };
+
+  function angleDelta(from, to) {
+    return ((to - from + Math.PI * 3) % (Math.PI * 2)) - Math.PI;
+  }
+
+  function setOrbit(yaw, pitch, dist) {
+    orbit.yaw = goal.yaw = yaw;
+    orbit.pitch = goal.pitch = Math.max(0.2, Math.min(1.05, pitch));
+    orbit.dist = goal.dist = Math.max(3, Math.min(15.5, dist));
+  }
+
+  function overview() {
+    goal.yaw = orbit.yaw;
+    goal.pitch = HOME.pitch;
+    goal.dist = HOME.dist;
+    goal.target.copy(HOME.target);
+  }
+
+  function focusShelf(shelf) {
+    var world = new THREE.Vector3();
+    shelf.hit.getWorldPosition(world);
+    goal.target.set(world.x, 1.05, world.z);
+    goal.yaw = shelf.group.rotation.y;
+    goal.pitch = 0.4;
+    goal.dist = 3.4;
+  }
+
+  function applyOrbit() {
+    var flat = Math.cos(orbit.pitch) * orbit.dist;
+    camera.position.set(
+      orbit.target.x + flat * Math.sin(orbit.yaw),
+      orbit.target.y + Math.sin(orbit.pitch) * orbit.dist,
+      orbit.target.z + flat * Math.cos(orbit.yaw)
+    );
+    camera.lookAt(orbit.target);
+  }
+
+  // ------------------------------------------------------------------- state
+  var coins = 1000;
+  var focused = null;
+  var picked = null;
+  var growing = [];
+  var outdoor = false;
+
+  var el = {
+    coins: document.getElementById('coinValue'),
+    prompt: document.getElementById('prompt'),
+    tray: document.getElementById('tray'),
+    pickName: document.getElementById('pickName'),
+    pickSlot: document.getElementById('pickSlot'),
+    waterValue: document.getElementById('waterValue'),
+    waterFill: document.getElementById('waterFill'),
+    waterBtn: document.getElementById('waterBtn'),
+    repotBtn: document.getElementById('repotBtn'),
+    tossBtn: document.getElementById('tossBtn'),
+    shiftBtn: document.getElementById('shiftBtn'),
+    move: document.getElementById('moveBtn'),
+    placeBar: document.getElementById('placeBar'),
+    placeHint: document.getElementById('placeHint'),
+    placeTurn: document.getElementById('placeTurn'),
+    placeOk: document.getElementById('placeOk'),
+    placeCancel: document.getElementById('placeCancel'),
+    potSheet: document.getElementById('potSheet'),
+    potGrid: document.getElementById('potGrid'),
+    potFor: document.getElementById('potFor'),
+    potClose: document.getElementById('potClose'),
+    back: document.getElementById('backBtn'),
+    shopSheet: document.getElementById('shopSheet'),
+    shopTabs: document.getElementById('shopTabs'),
+    shopList: document.getElementById('shopList'),
+    shopClose: document.getElementById('shopClose'),
+    shopCoins: document.getElementById('shopCoins'),
+    coinBtn: document.getElementById('coinBtn'),
+    storeSheet: document.getElementById('storeSheet'),
+    storeList: document.getElementById('storeList'),
+    storeClose: document.getElementById('storeClose'),
+    boot: document.getElementById('boot')
+  };
+
+  function say(text) { el.prompt.textContent = text; }
+
+  function setCoins(value) {
+    coins = value;
+    el.coins.textContent = coins;
+    el.shopCoins.textContent = coins;
+    if (!el.shopSheet.hidden) renderShop();
+    if (!el.storeSheet.hidden) renderStore();
+  }
+
+  var DRY_COLOUR = new THREE.Color('#b39a4c');
+  var DEAD_COLOUR = new THREE.Color('#6f6136');
+
+  function priceOf(info) { return info.price || info.species.price; }
+
+  function refreshTray() {
+    if (!picked || !picked.parent) { clearPick(); return; }
+    var info = picked.userData.pick;
+    var pct = Math.round(info.water * 100);
+    el.pickName.textContent = info.species.name;
+    el.waterValue.textContent = pct + '%';
+    el.waterFill.style.width = pct + '%';
+    var state = info.dead ? ' · eingegangen' : (info.water < 0.25 ? ' · durstig' : '');
+    el.pickSlot.textContent = info.shelf.label + ' · ' + priceOf(info) + ' ●' + state;
+    el.pickSlot.className = info.dead ? 'dead' : (info.water < 0.25 ? 'warn' : '');
+    el.waterBtn.disabled = info.dead || info.water > 0.985;
+    el.repotBtn.disabled = info.dead;
+    el.tossBtn.disabled = !info.dead;
+  }
+
+  function showPick(plant) {
+    picked = plant;
+    refreshTray();
+    el.tray.classList.add('on');
+  }
+
+  function clearPick() {
+    picked = null;
+    el.tray.classList.remove('on');
+  }
+
+  el.waterBtn.addEventListener('click', function () {
+    if (!picked) return;
+    var info = picked.userData.pick;
+    if (info.dead) return;
+    info.water = Math.min(1, info.water + 0.4);
+    info.dry = 0;
+    picked.userData.pop = 1;
+    refreshTray();
+    say(info.species.name + ' gegossen.');
+  });
+
+  var POTS = [
+    { id: 'terracotta', name: 'Terrakotta', colour: '#cd6a36', cost: 8, value: 10, scale: 1 },
+    { id: 'sage', name: 'Salbei', colour: '#7d9a7a', cost: 12, value: 16, scale: 1.06 },
+    { id: 'ceramic', name: 'Keramik', colour: '#e0bd8e', cost: 18, value: 24, scale: 1.12 }
+  ];
+
+  function openPotSheet() {
+    if (!picked) return;
+    var info = picked.userData.pick;
+    el.potFor.textContent = info.species.name + ' · aktuell ' + priceOf(info) + ' Münzen wert';
+    el.potGrid.textContent = '';
+    POTS.forEach(function (pot) {
+      var button = document.createElement('button');
+      button.type = 'button';
+      button.className = 'pot-choice';
+      var swatch = document.createElement('i');
+      swatch.style.background = pot.colour;
+      var name = document.createElement('b');
+      name.textContent = pot.name;
+      var meta = document.createElement('span');
+      meta.textContent = pot.cost + ' ● → ' + (info.species.price + pot.value);
+      button.append(swatch, name, meta);
+      button.disabled = coins < pot.cost || info.pot === pot.id;
+      button.addEventListener('click', function () { applyPot(pot); });
+      el.potGrid.appendChild(button);
+    });
+    el.potSheet.hidden = false;
+  }
+
+  function applyPot(pot) {
+    if (!picked || coins < pot.cost) return;
+    var info = picked.userData.pick;
+    setCoins(coins - pot.cost);
+    info.pot = pot.id;
+    // Value is set, not stacked, so repotting can never be farmed for coins.
+    info.price = info.species.price + pot.value;
+    picked.userData.potMat.color.set(pot.colour);
+    picked.scale.setScalar(picked.userData.baseScale * pot.scale);
+    picked.userData.pop = 1;
+    el.potSheet.hidden = true;
+    refreshTray();
+    say('Umgetopft in ' + pot.name + '. Wert jetzt ' + info.price + ' Münzen.');
+  }
+
+  el.repotBtn.addEventListener('click', openPotSheet);
+  el.potClose.addEventListener('click', function () { el.potSheet.hidden = true; });
+  el.potSheet.addEventListener('click', function (e) {
+    if (e.target === el.potSheet) el.potSheet.hidden = true;
+  });
+
+  el.tossBtn.addEventListener('click', function () {
+    if (!picked) return;
+    var info = picked.userData.pick;
+    if (!info.dead) return;
+    if (info.slot) info.slot.plant = null;
+    var index = sellables.indexOf(picked);
+    if (index >= 0) sellables.splice(index, 1);
+    if (picked.parent) picked.parent.remove(picked);
+    say(info.species.name + ' entsorgt. Der Platz ist wieder frei.');
+    clearPick();
+  });
+
+  // --------------------------------------------------------- order terminal
+  function openSlots() {
+    var free = [];
+    shelves.forEach(function (shelf) {
+      if (!shelf.built) return;
+      shelf.slots.forEach(function (slot) {
+        if (!slot.plant) free.push({ shelf: shelf, slot: slot });
+      });
+    });
+    return free;
+  }
+
+  function buildBed(x, z, label) {
+    var group = new THREE.Group();
+    group.position.set(x, 0, z);
+    var box = new THREE.Mesh(new THREE.BoxGeometry(2.2, 0.44, 0.9), woodMat);
+    box.position.y = 0.22;
+    group.add(box);
+    var soil = new THREE.Mesh(new THREE.BoxGeometry(2.06, 0.06, 0.76), soilMat);
+    soil.position.y = 0.45;
+    group.add(soil);
+    var slots = [];
+    for (var i = 0; i < 3; i++) slots.push({ tier: 0, x: -0.7 + i * 0.7, y: 0.47, z: 0, plant: null });
+    var hit = new THREE.Mesh(
+      new THREE.BoxGeometry(2.4, 1.2, 1.15),
+      new THREE.MeshBasicMaterial({ visible: false })
+    );
+    hit.position.y = 0.6;
+    group.add(hit);
+    markShadow(group);
+    scene.add(group);
+    OBSTACLES.push({ x: x, z: z, r: 1.35, active: true });
+    var bed = { group: group, hit: hit, slots: slots, label: label, built: true };
+    hit.userData.shelf = bed;
+    shelves.push(bed);
+    return bed;
+  }
+
+  function openGreenhouse() {
+    outdoor = true;
+    for (var i = 0; i < walls.length; i++) {
+      if (walls[i].group === wallFront) { walls.splice(i, 1); break; }
+    }
+    scene.remove(wallFront);
+
+    var deck = new THREE.Mesh(new THREE.BoxGeometry(ROOM_W, 0.05, 5.4), woodMat);
+    deck.position.set(0, 0.024, ROOM_D / 2 + 2.6);
+    deck.receiveShadow = true;
+    scene.add(deck);
+
+    var railMat = new THREE.MeshStandardMaterial({ color: '#8a6440', roughness: 0.85 });
+    [-ROOM_W / 2 + 0.1, ROOM_W / 2 - 0.1].forEach(function (x) {
+      var rail = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.7, 5.4), railMat);
+      rail.position.set(x, 0.35, ROOM_D / 2 + 2.6);
+      rail.castShadow = rail.receiveShadow = true;
+      scene.add(rail);
+    });
+    var frontRail = new THREE.Mesh(new THREE.BoxGeometry(ROOM_W, 0.7, 0.12), railMat);
+    frontRail.position.set(0, 0.35, ROOM_D / 2 + 5.24);
+    frontRail.castShadow = frontRail.receiveShadow = true;
+    scene.add(frontRail);
+
+    buildBed(-2.7, ROOM_D / 2 + 2.2, 'Beet links');
+    buildBed(2.7, ROOM_D / 2 + 2.2, 'Beet rechts');
+    guestSpots.push({ x: -2.6, z: ROOM_D / 2 + 3.4 }, { x: 2.6, z: ROOM_D / 2 + 3.4 });
+  }
+
+  var candleMat = new THREE.MeshStandardMaterial({ color: '#f2e6cd', roughness: 0.6 });
+  var flameMat = new THREE.MeshBasicMaterial({ color: '#ffca6a' });
+
+  function candleCluster() {
+    var group = new THREE.Group();
+    [[0, 0, 0.17], [0.16, 0.04, 0.13], [-0.15, -0.03, 0.11]].forEach(function (c) {
+      var stick = new THREE.Mesh(new THREE.CylinderGeometry(0.045, 0.05, c[2], 10), candleMat);
+      stick.position.set(c[0], c[2] / 2, c[1]);
+      group.add(stick);
+      var flame = new THREE.Mesh(new THREE.SphereGeometry(0.025, 8, 6), flameMat);
+      flame.scale.y = 1.7;
+      flame.position.set(c[0], c[2] + 0.04, c[1]);
+      group.add(flame);
+    });
+    markShadow(group);
+    return group;
+  }
+
+  function runnerRug() {
+    return new THREE.Mesh(
+      new THREE.PlaneGeometry(1.3, 3.4),
+      new THREE.MeshStandardMaterial({ color: '#6b8757', roughness: 1 })
+    );
+  }
+
+  var DECOR = [
+    {
+      id: 'rug', name: 'Runder Teppich', cost: 18, cat: 'rugs',
+      note: 'Warmer Teppich für die Raummitte.',
+      preview: function () {
+        var disc = new THREE.Mesh(
+          new THREE.CircleGeometry(1.35, 32),
+          new THREE.MeshStandardMaterial({ color: '#6f8f5f', roughness: 1 })
+        );
+        disc.rotation.x = -Math.PI / 2;
+        return disc;
+      },
+      place: function () { rug.visible = true; }
+    },
+    {
+      id: 'runner', name: 'Läufer am Eingang', cost: 14, cat: 'rugs',
+      note: 'Schmaler Teppich vor der Theke.',
+      preview: function () {
+        var strip = runnerRug();
+        strip.rotation.x = -Math.PI / 2;
+        return strip;
+      },
+      place: function () {
+        var strip = runnerRug();
+        strip.rotation.x = -Math.PI / 2;
+        strip.position.set(-1.4, 0.013, 2.4);
+        strip.receiveShadow = true;
+        scene.add(strip);
+      }
+    },
+    {
+      id: 'candles', name: 'Kerzen für die Theke', cost: 16, cat: 'light',
+      note: 'Drei Kerzen mit warmem Schein.',
+      preview: candleCluster,
+      place: function () {
+        var group = candleCluster();
+        group.position.set(0.2, 1.08, 0.1);
+        counter.add(group);
+        var glow = new THREE.PointLight('#ffb768', 0.45, 4, 2);
+        glow.position.set(-2.9, 1.5, 2.3);
+        scene.add(glow);
+      }
+    },
+    {
+      id: 'art', name: 'Bilder an der Wand', cost: 26, cat: 'wall',
+      note: 'Vier gerahmte Blattdrucke.',
+      preview: function () {
+        var group = new THREE.Group();
+        var frame = new THREE.Mesh(
+          new THREE.BoxGeometry(0.88, 0.7, 0.05),
+          new THREE.MeshStandardMaterial({ color: '#8a6a45', roughness: 0.7 })
+        );
+        var art = new THREE.Mesh(
+          new THREE.PlaneGeometry(0.8, 0.62),
+          new THREE.MeshStandardMaterial({ color: '#d7e4c4', roughness: 0.9 })
+        );
+        art.position.z = 0.031;
+        frame.add(art);
+        group.add(frame);
+        return group;
+      },
+      place: function () {
+        wallArt(-0.4, 2.35, -ROOM_D / 2 + 0.05, 0, 0.8, 0.62, '#d7e4c4', wallBack);
+        wallArt(3.5, 2.45, -ROOM_D / 2 + 0.05, 0, 0.56, 0.7, '#cfe0bd', wallBack);
+        wallArt(-ROOM_W / 2 + 0.05, 2.3, 1.7, Math.PI / 2, 0.66, 0.5, '#dbe6c9', wallLeft);
+        wallArt(ROOM_W / 2 - 0.05, 2.35, -1.2, -Math.PI / 2, 0.6, 0.62, '#dbe6c9', wallRight);
+      }
+    },
+    {
+      id: 'hang', name: 'Hängepflanzen', cost: 22, cat: 'plants',
+      note: 'Zwei Ampeln über dem Mittelgang.',
+      preview: function () {
+        var group = new THREE.Group();
+        var bowl = new THREE.Mesh(
+          new THREE.SphereGeometry(0.24, 14, 10, 0, Math.PI * 2, 0, Math.PI / 2),
+          potMats[1]
+        );
+        bowl.rotation.x = Math.PI;
+        bowl.position.y = 0.5;
+        group.add(bowl);
+        for (var i = 0; i < 8; i++) {
+          var vine = new THREE.Mesh(leafGeo, new THREE.MeshStandardMaterial({ color: '#3c7a44', roughness: 0.66 }));
+          vine.scale.set(0.12, 0.04, 0.1);
+          vine.position.set((Math.random() - 0.5) * 0.5, 0.12 + Math.random() * 0.42, (Math.random() - 0.5) * 0.5);
+          vine.rotation.set((Math.random() - 0.5) * 1, Math.random() * Math.PI, (Math.random() - 0.5) * 1);
+          group.add(vine);
+        }
+        return group;
+      },
+      place: function () { hangingPlant(-1.9, -3.2); hangingPlant(2.9, -3.1); }
+    },
+    {
+      id: 'floor', name: 'Grosse Bodenpflanzen', cost: 30, cat: 'plants',
+      note: 'Vier kräftige Pflanzen in die Ecken.',
+      preview: function () {
+        var group = new THREE.Group();
+        var pot = new THREE.Mesh(new THREE.CylinderGeometry(0.26, 0.19, 0.36, 14), potMats[0]);
+        pot.position.y = 0.18;
+        group.add(pot);
+        for (var i = 0; i < 9; i++) {
+          var leaf = new THREE.Mesh(leafGeo, new THREE.MeshStandardMaterial({ color: '#3c7a44', roughness: 0.66 }));
+          leaf.scale.set(0.22, 0.055, 0.17);
+          leaf.position.set((Math.random() - 0.5) * 0.5, 0.45 + Math.random() * 0.6, (Math.random() - 0.5) * 0.5);
+          leaf.rotation.set((Math.random() - 0.5) * 0.8, Math.random() * Math.PI, (Math.random() - 0.5) * 0.8);
+          group.add(leaf);
+        }
+        return group;
+      },
+      place: function () {
+        floorPlant(-4.6, -3.2, 0.75);
+        floorPlant(4.4, -3.4, 0.62);
+        floorPlant(-4.7, 2.9, 0.7);
+        floorPlant(3.9, 2.2, 0.55);
+      }
+    },
+    {
+      id: 'mirror', name: 'Wandspiegel', cost: 24, cat: 'wall',
+      note: 'Runder Spiegel, macht den Laden weiter.',
+      preview: function () {
+        var group = new THREE.Group();
+        var ring = new THREE.Mesh(new THREE.TorusGeometry(0.34, 0.045, 10, 26),
+          new THREE.MeshStandardMaterial({ color: '#8a6a45', roughness: 0.6 }));
+        group.add(ring);
+        var glass = new THREE.Mesh(new THREE.CircleGeometry(0.32, 28),
+          new THREE.MeshStandardMaterial({ color: '#cfdbd6', roughness: 0.15, metalness: 0.6 }));
+        glass.position.z = 0.01;
+        group.add(glass);
+        return group;
+      },
+      place: function () {
+        var ring = new THREE.Mesh(new THREE.TorusGeometry(0.42, 0.05, 10, 28),
+          new THREE.MeshStandardMaterial({ color: '#8a6a45', roughness: 0.6 }));
+        ring.position.set(-1.9, 2.15, -ROOM_D / 2 + 0.08);
+        var glass = new THREE.Mesh(new THREE.CircleGeometry(0.4, 30),
+          new THREE.MeshStandardMaterial({ color: '#cfdbd6', roughness: 0.15, metalness: 0.6 }));
+        glass.position.set(-1.9, 2.15, -ROOM_D / 2 + 0.09);
+        ring.castShadow = true;
+        wallBack.add(ring);
+        wallBack.add(glass);
+      }
+    },
+    {
+      id: 'lamp', name: 'Stehlampe', cost: 38, cat: 'light',
+      note: 'Warmes Licht in der Leseecke.',
+      preview: function () {
+        var group = new THREE.Group();
+        var pole = new THREE.Mesh(new THREE.CylinderGeometry(0.022, 0.03, 1.5, 8), darkMat);
+        pole.position.y = 0.75;
+        group.add(pole);
+        var base = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.22, 0.05, 16), darkMat);
+        base.position.y = 0.025;
+        group.add(base);
+        var shade = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.28, 0.3, 16, 1, true),
+          new THREE.MeshStandardMaterial({ color: '#f0dfb4', roughness: 0.85, side: THREE.DoubleSide }));
+        shade.position.y = 1.62;
+        group.add(shade);
+        return group;
+      },
+      place: function () {
+        var lampGroup = DECOR.filter(function (d) { return d.id === 'lamp'; })[0].preview();
+        lampGroup.position.set(3.9, 0, 2.9);
+        markShadow(lampGroup);
+        scene.add(lampGroup);
+        var warm = new THREE.PointLight('#ffc27a', 0.7, 7, 2);
+        warm.position.set(3.9, 1.7, 2.9);
+        scene.add(warm);
+      }
+    },
+    {
+      id: 'lights', name: 'Lichterkette rechts', cost: 34, cat: 'light',
+      note: 'Warme Lichter entlang der rechten Wand.',
+      preview: function () {
+        var group = new THREE.Group();
+        var wire = new THREE.Mesh(new THREE.BoxGeometry(1.5, 0.02, 0.02),
+          new THREE.MeshStandardMaterial({ color: '#5b4632', roughness: 1 }));
+        wire.position.y = 0.3;
+        group.add(wire);
+        for (var i = 0; i < 6; i++) {
+          var bulb = new THREE.Mesh(new THREE.SphereGeometry(0.07, 10, 8), bulbMat);
+          bulb.position.set(-0.62 + i * 0.25, 0.24 - Math.sin(i / 5 * Math.PI) * 0.06, 0);
+          group.add(bulb);
+        }
+        return group;
+      },
+      place: function () {
+        for (var i = 0; i < 12; i++) {
+          var t = i / 11;
+          var bulb = new THREE.Mesh(new THREE.SphereGeometry(0.055, 8, 6), bulbMat);
+          bulb.position.set(
+            ROOM_W / 2 - 0.16,
+            WALL_H - 0.34 - Math.sin(t * Math.PI) * 0.18,
+            -ROOM_D / 2 + 0.7 + t * (ROOM_D - 1.4)
+          );
+          wallRight.add(bulb);
+        }
+      }
+    }
+  ];
+
+  // Every catalogue picture is rendered from the same models the shop uses, so
+  // the photo can never drift from the goods.
+  var studio = new THREE.WebGLRenderer({ antialias: true, alpha: true, preserveDrawingBuffer: true });
+  studio.setPixelRatio(2);
+  studio.setSize(150, 150);
+  studio.outputEncoding = THREE.sRGBEncoding;
+  var studioScene = new THREE.Scene();
+  studioScene.add(new THREE.HemisphereLight('#eef5e8', '#4d5a42', 1.05));
+  var studioSun = new THREE.DirectionalLight('#fff4dc', 1.7);
+  studioSun.position.set(3.2, 5.4, 4.1);
+  studioScene.add(studioSun);
+  var studioCam = new THREE.PerspectiveCamera(34, 1, 0.05, 80);
+  var photos = {};
+
+  function photo(key, make) {
+    if (photos[key]) return photos[key];
+    var subject = make();
+    subject.position.set(0, 0, 0);
+    subject.rotation.set(0, 0, 0);
+    subject.scale.setScalar(1);
+
+    var strip = [];
+    subject.traverse(function (node) {
+      if (node.isMesh && node.material && node.material.visible === false) strip.push(node);
+      if (node !== subject && node.userData && node.userData.pick) strip.push(node);
+    });
+    strip.forEach(function (node) { if (node.parent) node.parent.remove(node); });
+    // Goods stay hidden in the shop until bought; the copy used for the photo
+    // has to be visible or it measures as an empty box.
+    subject.traverse(function (node) { node.visible = true; });
+
+    studioScene.add(subject);
+    var box = new THREE.Box3().setFromObject(subject);
+    if (!isFinite(box.min.x)) box.set(new THREE.Vector3(-0.5, 0, -0.5), new THREE.Vector3(0.5, 1, 0.5));
+    var size = box.getSize(new THREE.Vector3());
+    var centre = box.getCenter(new THREE.Vector3());
+    var reach = Math.max(size.x, size.y, size.z) * 0.62 + 0.22;
+    var away = reach / Math.tan(Math.PI * 34 / 360);
+    studioCam.position.set(centre.x + away * 0.58, centre.y + away * 0.44, centre.z + away * 0.7);
+    studioCam.lookAt(centre);
+    studio.render(studioScene, studioCam);
+    var url = studio.domElement.toDataURL('image/png');
+    studioScene.remove(subject);
+    photos[key] = url;
+    return url;
+  }
+
+  // clone() deep-copies userData through JSON, and the furniture links back to
+  // itself there, so the links are parked while the copy is taken.
+  function unitPhoto(unit) {
+    return photo('unit-' + unit.label, function () {
+      var parked = [];
+      unit.group.traverse(function (node) {
+        parked.push([node, node.userData]);
+        node.userData = {};
+      });
+      try {
+        return unit.group.clone(true);
+      } finally {
+        parked.forEach(function (entry) { entry[0].userData = entry[1]; });
+      }
+    });
+  }
+
+  var bought = {};
+  var shopTab = 'plants';
+  var plantGroup = 'green';
+  var buildGroup = 'racks';
+  var decorGroup = 'rugs';
+
+  function chipRow(groups, current, onPick) {
+    var chips = document.createElement('div');
+    chips.className = 'chips';
+    groups.forEach(function (group) {
+      var chip = document.createElement('button');
+      chip.type = 'button';
+      chip.textContent = group.name;
+      if (current === group.id) chip.className = 'on';
+      chip.addEventListener('click', function () { onPick(group.id); });
+      chips.appendChild(chip);
+    });
+    return chips;
+  }
+
+  function offerRow(icon, title, note, label, enabled, onBuy, demo) {
+    var row = document.createElement('div');
+    row.className = demo ? 'offer demo' : 'offer';
+    var mark;
+    if (typeof icon === 'string' && icon.slice(0, 5) === 'data:') {
+      mark = document.createElement('img');
+      mark.src = icon;
+      mark.alt = '';
+    } else {
+      mark = document.createElement('i');
+      mark.textContent = icon;
+    }
+    var text = document.createElement('div');
+    var name = document.createElement('b');
+    name.textContent = title;
+    var sub = document.createElement('small');
+    sub.textContent = note;
+    text.appendChild(name);
+    text.appendChild(sub);
+    var button = document.createElement('button');
+    button.type = 'button';
+    button.textContent = label;
+    button.disabled = !enabled;
+    button.addEventListener('click', onBuy);
+    row.appendChild(mark);
+    row.appendChild(text);
+    row.appendChild(button);
+    return row;
+  }
+
+  function renderShop() {
+    var list = el.shopList;
+    list.textContent = '';
+
+    if (shopTab === 'plants') {
+      var free = openSlots().length;
+      var hint = document.createElement('p');
+      hint.className = 'demo-note';
+      hint.textContent = free
+        ? free + ' freie Plätze auf Regalen, Tischen und Beeten.'
+        : 'Noch kein Platz. Bestelle zuerst ein Regal oder einen Tisch.';
+      list.appendChild(hint);
+
+      var chips = document.createElement('div');
+      chips.className = 'chips';
+      PLANT_GROUPS.concat([{ id: 'packs', name: 'Pakete' }]).forEach(function (group) {
+        var chip = document.createElement('button');
+        chip.type = 'button';
+        chip.textContent = group.name;
+        if (plantGroup === group.id) chip.className = 'on';
+        chip.addEventListener('click', function () { plantGroup = group.id; renderShop(); });
+        chips.appendChild(chip);
+      });
+      list.appendChild(chips);
+
+      if (plantGroup === 'packs') {
+        PLANT_PACKS.forEach(function (pack) {
+          var members = pack.pick.map(speciesByName);
+          var full = members.reduce(function (sum, item) { return sum + Math.round(item.price * 0.55); }, 0);
+          var cost = Math.round(full * 0.85);
+          list.appendChild(offerRow(
+            photo('pack-' + pack.id, function () { return buildPlant(members[0], 1); }),
+            pack.name,
+            pack.note + ' Einzeln ' + full + ', im Paket ' + cost + '.',
+            cost + ' ●',
+            coins >= cost && free >= members.length,
+            function () { orderPack(pack, members, cost); }));
+        });
+        return;
+      }
+
+      var chosen = PLANT_GROUPS[0];
+      PLANT_GROUPS.forEach(function (group) { if (group.id === plantGroup) chosen = group; });
+      chosen.species.forEach(function (species) {
+        var cost = Math.round(species.price * 0.55);
+        list.appendChild(offerRow(
+          photo('plant-' + species.name, function () { return buildPlant(species, 1); }),
+          species.name,
+          'Einkauf ' + cost + ' · Verkauf ab ' + species.price + ' Münzen',
+          cost + ' ●', coins >= cost && free > 0,
+          function () { orderPlant(species, cost); }));
+      });
+      return;
+    }
+
+    if (shopTab === 'build') {
+      var BUILD_GROUPS = [
+        { id: 'racks', name: 'Regale' },
+        { id: 'tables', name: 'Tische & Bänke' },
+        { id: 'wall', name: 'Wand' },
+        { id: 'rooms', name: 'Räume' }
+      ];
+      list.appendChild(chipRow(BUILD_GROUPS, buildGroup, function (id) { buildGroup = id; renderShop(); }));
+
+      if (buildGroup === 'rooms') {
+        list.appendChild(offerRow('\u2302', 'Gew\u00e4chshaus draussen',
+          outdoor ? 'Die Terrasse ist offen.' : '\u00d6ffnet die Vorderseite auf eine Terrasse mit zwei Anzuchtbeeten.',
+          outdoor ? 'Gekauft' : '120 \u25cf', !outdoor && coins >= 120,
+          function () {
+            setCoins(coins - 120);
+            openGreenhouse();
+            renderShop();
+            say('Das Gew\u00e4chshaus ist offen \u2013 Lynn kann jetzt nach draussen.');
+          }));
+        return;
+      }
+
+      var units = [
+        { unit: shelfA, cost: 15, cat: 'racks', note: 'Drei B\u00f6den, neun Stellpl\u00e4tze.' },
+        { unit: shelfB, cost: 30, cat: 'racks', note: 'Breiter Korpus, zw\u00f6lf Stellpl\u00e4tze.' },
+        { unit: shelfC, cost: 45, cat: 'racks', note: 'Vier B\u00f6den bis unter die Lichterkette.' },
+        { unit: shelfD, cost: 20, cat: 'racks', note: 'Schmal, passt in jede Ecke.' },
+        { unit: shelfE, cost: 24, cat: 'tables', note: 'Arbeitsh\u00f6he mit Ablage darunter.' },
+        { unit: tableUnit, cost: 20, cat: 'tables', note: 'Drei Pl\u00e4tze mitten im Raum.' },
+        { unit: benchUnit, cost: 18, cat: 'tables', note: 'F\u00fcnf Pl\u00e4tze auf der Bank am Eingang.' },
+        { unit: wallShelfUnit, cost: 22, cat: 'wall', note: 'Zwei Bretter, f\u00fcnf Pl\u00e4tze.' },
+        { unit: ropeShelfUnit, cost: 26, cat: 'wall', note: 'An Seilen aufgeh\u00e4ngt, vier Pl\u00e4tze.' }
+      ];
+      units.filter(function (item) { return item.cat === buildGroup; }).forEach(function (item) {
+        var state = item.unit.built ? 'Steht im Laden.'
+          : (item.unit.ordered ? 'Liegt in der Anlieferung.' : item.note);
+        var label = item.unit.built ? 'Gekauft' : (item.unit.ordered ? 'Geliefert' : item.cost + ' \u25cf');
+        list.appendChild(offerRow(unitPhoto(item.unit), item.unit.label, state, label,
+          !item.unit.built && !item.unit.ordered && coins >= item.cost,
+          function () {
+            setCoins(coins - item.cost);
+            deliverUnit(item.unit, item.unit.label);
+            renderShop();
+          }));
+      });
+      return;
+    }
+
+    if (shopTab === 'decor') {
+      var DECOR_GROUPS = [
+        { id: 'rugs', name: 'Teppiche' },
+        { id: 'wall', name: 'Wand' },
+        { id: 'light', name: 'Licht' },
+        { id: 'plants', name: 'Pflanzendeko' }
+      ];
+      list.appendChild(chipRow(DECOR_GROUPS, decorGroup, function (id) { decorGroup = id; renderShop(); }));
+      DECOR.filter(function (item) { return item.cat === decorGroup; }).forEach(function (item) {
+        list.appendChild(offerRow(photo('decor-' + item.id, item.preview), item.name,
+          bought[item.id] ? 'Steht im Laden.' : item.note,
+          bought[item.id] ? 'Gekauft' : item.cost + ' \u25cf',
+          !bought[item.id] && coins >= item.cost,
+          function () {
+            setCoins(coins - item.cost);
+            bought[item.id] = true;
+            item.place();
+            renderShop();
+            say(item.name + ' geliefert.');
+          }));
+      });
+      return;
+    }
+  }
+
+  function orderPlant(species, cost) {
+    var free = openSlots();
+    if (!free.length || coins < cost) return;
+    var spot = free[0];
+    setCoins(coins - cost);
+    var plant = fillSlot(spot.shelf, spot.slot, species);
+    plant.userData.pick.water = 0.75;
+    renderShop();
+    say(species.name + ' geliefert: ' + spot.shelf.label + '.');
+  }
+
+  // ------------------------------------------------------ delivery & moving
+  var crates = [];
+  var placing = null;
+  var movingPlant = null;
+
+  function layoutCrates() {
+    crates.forEach(function (crate, i) {
+      crate.position.set(
+        DELIVERY.x - 0.42 + (i % 2) * 0.84,
+        0.26,
+        DELIVERY.z - 0.4 + Math.floor(i / 2) * 0.8
+      );
+    });
+  }
+
+  function deliverUnit(unit, name) {
+    unit.ordered = true;
+    var crate = new THREE.Mesh(new THREE.BoxGeometry(0.66, 0.52, 0.66), crateMat2);
+    crate.rotation.y = (Math.random() - 0.5) * 0.5;
+    crate.castShadow = crate.receiveShadow = true;
+    crate.userData.crate = unit;
+    unit.crate = crate;
+    scene.add(crate);
+    crates.push(crate);
+    layoutCrates();
+    say(name + ' liegt in der Anlieferung. Kiste antippen und hinstellen.');
+  }
+
+  function removeCrate(unit) {
+    if (!unit.crate) return;
+    scene.remove(unit.crate);
+    var index = crates.indexOf(unit.crate);
+    if (index >= 0) crates.splice(index, 1);
+    unit.crate = null;
+    layoutCrates();
+  }
+
+  function placeValid() {
+    if (!placing) return false;
+    var p = placing.unit.group.position;
+    if (placing.unit.wall) {
+      return Math.hypot(p.x + 3.1, p.z - 2.4) > 1.4 && Math.hypot(p.x - 3.4, p.z + ROOM_D / 2) > 1.5;
+    }
+    if (p.x < -ROOM_W / 2 + 0.9 || p.x > ROOM_W / 2 - 0.9) return false;
+    var zMax = outdoor ? ROOM_D / 2 + 4.2 : ROOM_D / 2 - 0.9;
+    if (p.z < -ROOM_D / 2 + 0.7 || p.z > zMax) return false;
+    for (var i = 0; i < OBSTACLES.length; i++) {
+      var o = OBSTACLES[i];
+      if (o.active === false) continue;
+      if (Math.hypot(p.x - o.x, p.z - o.z) < (o.r || 1.2) + 0.55) return false;
+    }
+    if (Math.hypot(p.x - DELIVERY.x, p.z - DELIVERY.z) < 1.5) return false;
+    return true;
+  }
+
+  function refreshPlaceBar() {
+    var ok = placeValid();
+    el.placeOk.disabled = !ok;
+    var onWall = placing && placing.unit.wall;
+    el.placeTurn.disabled = !!onWall;
+    el.placeHint.textContent = ok
+      ? (onWall ? 'An eine Wand ziehen · zwei Finger drehen' : 'Ziehen zum Führen · zwei Finger drehen')
+      : (onWall ? 'Nicht über Theke oder Fenster' : 'Hier ist kein Platz – etwas weiter ziehen');
+  }
+
+  function startPlacing(unit, isNew) {
+    if (placing) cancelPlacing();
+    movingPlant = null;
+    placing = {
+      unit: unit,
+      isNew: isNew,
+      from: { x: unit.group.position.x, z: unit.group.position.z, rot: unit.group.rotation.y }
+    };
+    unit.group.visible = true;
+    unit.group.scale.setScalar(1);
+    if (isNew) {
+      if (unit.wall) {
+        unit.group.position.set(0.4, 0, -ROOM_D / 2 + 0.12);
+        unit.group.rotation.y = 0;
+      } else {
+        unit.group.position.set(0.4, 0, -0.6);
+      }
+    }
+    if (unit.obstacle) unit.obstacle.active = false;
+    clearPick();
+    el.shopSheet.hidden = true;
+    el.move.classList.remove('on');
+    el.placeBar.classList.add('on');
+    refreshPlaceBar();
+  }
+
+  function confirmPlacing() {
+    if (!placing || !placeValid()) return;
+    var unit = placing.unit;
+    unit.built = true;
+    unit.ordered = false;
+    if (!unit.obstacle) {
+      unit.obstacle = { x: 0, z: 0, r: 1.2, active: true };
+      OBSTACLES.push(unit.obstacle);
+    }
+    unit.obstacle.x = unit.group.position.x;
+    unit.obstacle.z = unit.group.position.z;
+    unit.obstacle.active = true;
+    if (placing.isNew) {
+      removeCrate(unit);
+      growing.push({ group: unit.group, t: 0 });
+    }
+    say(unit.label + ' steht jetzt hier.');
+    placing = null;
+    el.placeBar.classList.remove('on');
+    if (!el.shopSheet.hidden) renderShop();
+  }
+
+  function cancelPlacing() {
+    if (!placing) return;
+    var unit = placing.unit;
+    if (placing.isNew) {
+      unit.group.visible = false;
+      unit.group.scale.setScalar(0.01);
+    } else {
+      unit.group.position.set(placing.from.x, 0, placing.from.z);
+      unit.group.rotation.y = placing.from.rot;
+      if (unit.obstacle) {
+        unit.obstacle.x = placing.from.x;
+        unit.obstacle.z = placing.from.z;
+        unit.obstacle.active = true;
+      }
+    }
+    placing = null;
+    el.placeBar.classList.remove('on');
+  }
+
+  el.placeTurn.addEventListener('click', function () {
+    if (placing && !placing.unit.wall) placing.unit.group.rotation.y += Math.PI / 2;
+  });
+  el.placeOk.addEventListener('click', confirmPlacing);
+  el.placeCancel.addEventListener('click', function () {
+    cancelPlacing();
+    say('Abgebrochen.');
+  });
+
+  el.move.addEventListener('click', function () {
+    if (!focused) return;
+    var unit = focused;
+    focused = null;
+    el.back.classList.remove('on');
+    overview();
+    startPlacing(unit, false);
+  });
+
+  el.shiftBtn.addEventListener('click', function () {
+    if (!picked) return;
+    movingPlant = picked;
+    clearPick();
+    say('Regal, Tisch oder Beet antippen – dorthin wird umgestellt.');
+  });
+
+  function movePlantTo(shelf) {
+    var free = null;
+    for (var i = 0; i < shelf.slots.length; i++) {
+      if (!shelf.slots[i].plant) { free = shelf.slots[i]; break; }
+    }
+    if (!free) { say('Kein freier Platz auf ' + shelf.label + '.'); return; }
+    var info = movingPlant.userData.pick;
+    if (info.slot) info.slot.plant = null;
+    shelf.group.add(movingPlant);
+    movingPlant.position.set(free.x, free.y, free.z);
+    free.plant = movingPlant;
+    info.slot = free;
+    info.shelf = shelf;
+    say(info.species.name + ' steht jetzt auf: ' + shelf.label + '.');
+    movingPlant = null;
+  }
+
+  function orderPack(pack, members, cost) {
+    var free = openSlots();
+    if (coins < cost || free.length < members.length) return;
+    setCoins(coins - cost);
+    members.forEach(function (species, i) {
+      var plant = fillSlot(free[i].shelf, free[i].slot, species);
+      plant.userData.pick.water = 0.75;
+    });
+    renderShop();
+    say(pack.name + ' geliefert: ' + members.length + ' Pflanzen eingeräumt.');
+  }
+
+  function openShop() {
+    el.shopSheet.hidden = false;
+    renderShop();
+  }
+
+  el.shopTabs.addEventListener('click', function (e) {
+    var button = e.target.closest('button[data-tab]');
+    if (!button) return;
+    shopTab = button.dataset.tab;
+    Array.prototype.forEach.call(el.shopTabs.children, function (tab) {
+      tab.classList.toggle('on', tab === button);
+    });
+    renderShop();
+  });
+  el.coinBtn.addEventListener('click', function () {
+    el.storeSheet.hidden = false;
+    renderStore();
+  });
+  el.storeClose.addEventListener('click', function () { el.storeSheet.hidden = true; });
+  el.storeSheet.addEventListener('click', function (e) {
+    if (e.target === el.storeSheet) el.storeSheet.hidden = true;
+  });
+
+  el.shopClose.addEventListener('click', function () { el.shopSheet.hidden = true; });
+  el.shopSheet.addEventListener('click', function (e) {
+    if (e.target === el.shopSheet) el.shopSheet.hidden = true;
+  });
+
+  // Selling by hand would mint coins out of nothing and undercut the coin
+  // packs, so plants only turn into money when a customer actually buys one.
+  function sellToGuest(plant) {
+    var info = plant.userData.pick;
+    setCoins(coins + (info.price || info.species.price));
+    if (info.slot) info.slot.plant = null;
+    var index = sellables.indexOf(plant);
+    if (index >= 0) sellables.splice(index, 1);
+    if (picked === plant) clearPick();
+    if (plant.parent) plant.parent.remove(plant);
+    say('Verkauft: ' + info.species.name + ' für ' + (info.price || info.species.price) + ' Münzen.');
+  }
+
+  el.back.addEventListener('click', function () {
+    focused = null;
+    clearPick();
+    overview();
+    el.back.classList.remove('on');
+    el.move.classList.remove('on');
+    say('Tippen: Lynn läuft hin. Regal antippen: herangehen. Zwei Finger: Ansicht drehen.');
+  });
+
+  function raiseShelf(shelf) {
+    shelf.built = true;
+    shelf.group.visible = true;
+    growing.push({ group: shelf.group, t: 0 });
+  }
+
+  // ----------------------------------------------------------------- input
+  var ray = new THREE.Raycaster();
+  var pointer = new THREE.Vector2();
+  var groundPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
+  var groundHit = new THREE.Vector3();
+
+  function floorPointAt(clientX, clientY) {
+    var rect = canvas.getBoundingClientRect();
+    pointer.x = ((clientX - rect.left) / rect.width) * 2 - 1;
+    pointer.y = -((clientY - rect.top) / rect.height) * 2 + 1;
+    ray.setFromCamera(pointer, camera);
+    return ray.ray.intersectPlane(groundPlane, groundHit) ? groundHit : null;
+  }
+
+  function snapToWall(x, z) {
+    var sides = [
+      { x: x, z: -ROOM_D / 2 + 0.12, rot: 0, away: Math.abs(z + ROOM_D / 2) },
+      { x: x, z: ROOM_D / 2 - 0.12, rot: Math.PI, away: Math.abs(z - ROOM_D / 2) },
+      { x: -ROOM_W / 2 + 0.12, z: z, rot: Math.PI / 2, away: Math.abs(x + ROOM_W / 2) },
+      { x: ROOM_W / 2 - 0.12, z: z, rot: -Math.PI / 2, away: Math.abs(x - ROOM_W / 2) }
+    ];
+    sides.sort(function (a, b) { return a.away - b.away; });
+    var side = sides[0];
+    side.x = Math.max(-ROOM_W / 2 + 1, Math.min(ROOM_W / 2 - 1, side.x));
+    side.z = Math.max(-ROOM_D / 2 + 1, Math.min(ROOM_D / 2 - 1, side.z));
+    return side;
+  }
+
+  function dragPlacement(clientX, clientY) {
+    var spot = floorPointAt(clientX, clientY);
+    if (!spot) return;
+    if (placing.unit.wall) {
+      var side = snapToWall(spot.x, spot.z);
+      placing.unit.group.position.set(side.x, 0, side.z);
+      placing.unit.group.rotation.y = side.rot;
+    } else {
+      placing.unit.group.position.set(spot.x, 0, spot.z);
+    }
+    refreshPlaceBar();
+  }
+  var downAt = null;
+  var pointers = new Map();
+  var gesture = null;
+
+  function midpoint() {
+    var x = 0, y = 0, n = 0;
+    pointers.forEach(function (p) { x += p.x; y += p.y; n += 1; });
+    return { x: x / n, y: y / n };
+  }
+
+  function spread() {
+    var a = [];
+    pointers.forEach(function (p) { a.push(p); });
+    if (a.length < 2) return 1;
+    return Math.max(1, Math.hypot(a[0].x - a[1].x, a[0].y - a[1].y));
+  }
+
+  function beginGesture(x, y, kind) {
+    gesture = { x: x, y: y, spread: spread(), yaw: orbit.yaw, pitch: orbit.pitch, dist: orbit.dist, kind: kind };
+  }
+
+  canvas.addEventListener('pointerdown', function (e) {
+    canvas.setPointerCapture(e.pointerId);
+    pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    if (pointers.size === 1) {
+      downAt = { x: e.clientX, y: e.clientY, t: performance.now() };
+      if (placing) dragPlacement(e.clientX, e.clientY);
+    } else if (pointers.size === 2) {
+      downAt = null;
+      var mid = midpoint();
+      beginGesture(mid.x, mid.y, 'touch');
+    }
+  });
+
+  canvas.addEventListener('pointermove', function (e) {
+    if (!pointers.has(e.pointerId)) return;
+    pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+
+    if (pointers.size >= 2 && gesture) {
+      var mid = midpoint();
+      setOrbit(
+        gesture.yaw - (mid.x - gesture.x) * 0.0075,
+        gesture.pitch + (mid.y - gesture.y) * 0.0042,
+        gesture.dist * (gesture.spread / spread())
+      );
+      return;
+    }
+
+    // While a piece is in hand the finger guides it and the view holds still,
+    // so the shop can be turned with two fingers without losing the piece.
+    if (placing && pointers.size === 1) {
+      dragPlacement(e.clientX, e.clientY);
+      return;
+    }
+
+    // One finger turns the room. A tap stays a tap because it barely moves.
+    if (pointers.size === 1 && downAt) {
+      var dx = e.clientX - downAt.x;
+      var dy = e.clientY - downAt.y;
+      if (!gesture && Math.hypot(dx, dy) > 12) beginGesture(downAt.x, downAt.y, 'mouse');
+      if (gesture) setOrbit(gesture.yaw - dx * 0.0075, gesture.pitch + dy * 0.0042, gesture.dist);
+    }
+  });
+
+  function releasePointer(e) {
+    pointers.delete(e.pointerId);
+    if (pointers.size === 0) gesture = null;
+  }
+
+  canvas.addEventListener('pointercancel', releasePointer);
+
+  canvas.addEventListener('pointerup', function (e) {
+    var wasGesture = !!gesture;
+    var start = downAt;
+    releasePointer(e);
+    if (pointers.size > 0) return;
+    downAt = null;
+    if (wasGesture || !start) return;
+    var moved = Math.hypot(e.clientX - start.x, e.clientY - start.y);
+    if (moved > 14 || performance.now() - start.t > 600) return;
+    handleTap(e);
+  });
+
+  function handleTap(e) {
+    var rect = canvas.getBoundingClientRect();
+    pointer.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
+    pointer.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
+    ray.setFromCamera(pointer, camera);
+
+    var hits = ray.intersectObjects(scene.children, true);
+    var plant = null;
+    var shelf = null;
+    var groundPoint = null;
+    var crate = null;
+
+    for (var i = 0; i < hits.length; i++) {
+      var obj = hits[i].object;
+      if (!crate && obj.userData.crate) crate = obj.userData.crate;
+      if (!plant && obj.userData.owner) plant = obj.userData.owner;
+      if (!shelf && obj.userData.shelf && obj.userData.shelf.built) shelf = obj.userData.shelf;
+      if (!groundPoint && obj === floor) groundPoint = hits[i].point;
+      if (!placing && !movingPlant && obj.userData.pc) { openShop(); return; }
+    }
+
+    // While a piece of furniture is in hand, the floor is the only target.
+    if (placing) {
+      if (groundPoint) {
+        placing.unit.group.position.set(groundPoint.x, 0, groundPoint.z);
+        refreshPlaceBar();
+      }
+      return;
+    }
+
+    if (movingPlant) {
+      if (shelf) movePlantTo(shelf);
+      else { movingPlant = null; say('Umstellen abgebrochen.'); }
+      return;
+    }
+
+    if (crate) { startPlacing(crate, true); return; }
+
+    // A plant inside the shelf you are already looking at wins; otherwise the
+    // shelf itself wins, so one tap always means "go closer" before "pick".
+    var plantShelf = plant && plant.userData.pick ? plant.userData.pick.shelf : null;
+    if (plant && (!shelf || focused === shelf || plantShelf !== shelf)) {
+      showPick(plant);
+      return;
+    }
+    if (shelf) {
+      focused = shelf;
+      focusShelf(shelf);
+      clearPick();
+      el.back.classList.add('on');
+      el.move.classList.toggle('on', shelf.slots && !!shelf.group);
+      say('Tippe eine einzelne Pflanze im Regal an.');
+      var world = new THREE.Vector3();
+      shelf.hit.getWorldPosition(world);
+      var toward = new THREE.Vector3(0, 0, 1).applyAxisAngle(new THREE.Vector3(0, 1, 0), shelf.group.rotation.y);
+      walkTo(lynn, world.x + toward.x * 1.25, world.z + toward.z * 1.25);
+      return;
+    }
+    if (groundPoint) {
+      walkTo(lynn, groundPoint.x, groundPoint.z);
+      say('Lynn ist unterwegs.');
+    }
+  }
+
+  // ------------------------------------------------------------------ plants
+  var WATER_DRAIN = 0.012;   // full pot to empty in roughly a minute and a half
+  var DRY_LIMIT = 20;        // seconds a plant survives once the water runs out
+
+  function killPlant(plant) {
+    var info = plant.userData.pick;
+    info.dead = true;
+    plant.userData.leafMat.color.copy(DEAD_COLOUR);
+    var foliage = plant.userData.foliage;
+    if (foliage) {
+      foliage.scale.set(0.86, 0.48, 0.86);
+      foliage.rotation.z = 0.3;
+    }
+    if (picked === plant) refreshTray();
+    say(info.species.name + ' ist eingegangen – entsorgen macht den Platz frei.');
+  }
+
+  function tendPlants(dt) {
+    for (var i = 0; i < sellables.length; i++) {
+      var plant = sellables[i];
+      if (!plant.parent) continue;
+      var info = plant.userData.pick;
+      if (info.dead) continue;
+
+      info.water = Math.max(0, info.water - dt * WATER_DRAIN);
+      if (info.water <= 0) {
+        info.dry = (info.dry || 0) + dt;
+        if (info.dry >= DRY_LIMIT) { killPlant(plant); continue; }
+      } else {
+        info.dry = 0;
+      }
+
+      // Colour and droop track thirst, so a dry shelf is readable at a glance.
+      var thirst = 1 - Math.min(1, info.water / 0.35);
+      plant.userData.leafMat.color.copy(plant.userData.baseLeaf).lerp(DRY_COLOUR, thirst * 0.8);
+      if (plant.userData.foliage && !plant.userData.pop) {
+        plant.userData.foliage.rotation.z = thirst * 0.13;
+      }
+    }
+
+  }
+
+  // ------------------------------------------------------------------- loop
+  // Portrait needs a steeper, wider look or the shop sits in a sea of floor.
+  var wasPortrait = null;
+  function resize() {
+    var w = window.innerWidth;
+    var h = window.innerHeight;
+    renderer.setSize(w, h, false);
+    camera.aspect = w / h;
+    var portrait = h > w;
+    camera.fov = portrait ? 46 : 34;
+    camera.updateProjectionMatrix();
+    if (portrait !== wasPortrait) {
+      wasPortrait = portrait;
+      HOME.pitch = portrait ? 0.76 : 0.42;
+      HOME.dist = portrait ? 15.5 : 12;
+      if (!placing && !focused) {
+        goal.pitch = orbit.pitch = HOME.pitch;
+        goal.dist = orbit.dist = HOME.dist;
+      }
+    }
+  }
+  window.addEventListener('resize', resize);
+  resize();
+
+  var last = performance.now();
+  var booted = false;
+
+  function frame(now) {
+    var dt = Math.min(0.05, (now - last) / 1000);
+    last = now;
+
+    stepPerson(lynn, dt);
+    stepGuest(dt);
+    tendPlants(dt);
+    if (picked) refreshTray();
+
+    catTail.rotation.z = Math.sin(now / 620) * 0.28;
+    catHead.rotation.y = Math.sin(now / 1900) * 0.5;
+
+    for (var i = growing.length - 1; i >= 0; i--) {
+      var g = growing[i];
+      g.t = Math.min(1, g.t + dt * 2.2);
+      var e = 1 - Math.pow(1 - g.t, 3);
+      g.group.scale.setScalar(0.01 + e * 0.99);
+      if (g.t >= 1) growing.splice(i, 1);
+    }
+
+    scene.traverse(function (n) {
+      if (n.userData && n.userData.pop) {
+        n.userData.pop = Math.max(0, n.userData.pop - dt * 2.6);
+        var s = 1 + Math.sin(n.userData.pop * Math.PI) * 0.12;
+        if (n.userData.foliage) n.userData.foliage.scale.setScalar(s);
+      }
+    });
+
+    var ease = Math.min(1, dt * 3.4);
+    orbit.yaw += angleDelta(orbit.yaw, goal.yaw) * ease;
+    orbit.pitch += (goal.pitch - orbit.pitch) * ease;
+    orbit.dist += (goal.dist - orbit.dist) * ease;
+    orbit.target.lerp(goal.target, ease);
+    applyOrbit();
+    updateWalls();
+
+    renderer.render(scene, camera);
+
+    if (!booted) {
+      booted = true;
+      el.boot.classList.add('gone');
+      setTimeout(function () { el.boot.remove(); }, 600);
+    }
+    requestAnimationFrame(frame);
+  }
+
+  setCoins(coins);
+  requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>
