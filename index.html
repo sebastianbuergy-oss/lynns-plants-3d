@@ -1078,7 +1078,7 @@
   dressGroup(shelfB.group, 'bookcaseClosedWide', 1.86, 'height');
   dressGroup(shelfC.group, 'bookcaseOpen', 2.14, 'height');
   dressGroup(shelfD.group, 'bookcaseOpenLow', 1.86, 'height');
-  dressGroup(shelfE.group, 'desk', 1.6, 'width');
+  dressGroup(shelfE.group, 'desk', 0.88, 'height');
 
   [shelfA, shelfB, shelfC, shelfD, shelfE].forEach(function (unit) {
     unit.group.visible = false;
@@ -1125,8 +1125,7 @@
   scene.add(counter);
 
   deskPc.userData.keep = true;
-  dressGroup(counter, 'kitchenBar', 2.2, 'width');
-  dressGroup(deskPc, 'computerScreen', 0.46, 'height', function (model) {
+  dressGroup(deskPc, 'computerScreen', 0.42, 'height', function (model) {
     model.traverse(function (node) { if (node.isMesh) node.userData.pc = true; });
   });
 
@@ -1218,7 +1217,7 @@
   table.position.set(1.1, 0, 0.5);
   markShadow(table);
   scene.add(table);
-  dressGroup(table, 'table', 1.7, 'width');
+  dressGroup(table, 'table', 0.78, 'height');
   var tableUnit = registerSurface(table, 'Mitteltisch', [
     { tier: 0, x: -0.5, y: 0.83, z: 0, plant: null },
     { tier: 0, x: 0.1, y: 0.83, z: -0.2, plant: null },
@@ -1335,7 +1334,7 @@
   ], 1.7, 0.8);
   wallShelfUnit.wall = true;
 
-  dressGroup(bench, 'bench', 3.2, 'width');
+  dressGroup(bench, 'bench', 0.52, 'height');
   var benchUnit = registerSurface(bench, 'Auslage vorne', [
     { tier: 0, x: -1.25, y: 0.565, z: 0, plant: null },
     { tier: 0, x: -0.63, y: 0.565, z: 0, plant: null },
