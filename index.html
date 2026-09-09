@@ -464,6 +464,7 @@
 <div class="boot" id="boot"><b>Lynn's Plants</b><span>Der Laden wird aufgebaut …</span></div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js" crossorigin="anonymous"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js" crossorigin="anonymous"></script>
 <script>
 (function () {
   'use strict';
@@ -634,6 +635,114 @@
   var counterGlow = new THREE.PointLight('#ffc98a', 0.35, 6, 2);
   counterGlow.position.set(-3.1, 2.1, 2.2);
   scene.add(counterGlow);
+
+  // ------------------------------------------------------------------ models
+  // Real models live next to the page. Where they are missing - inside a
+  // published artifact, for instance - the built-in shapes simply stay.
+  var MODELS = 'models/';
+  var gltf = window.THREE && THREE.GLTFLoader ? new THREE.GLTFLoader() : null;
+  var modelCache = {};
+
+  function loadModel(name) {
+    if (!gltf) return Promise.resolve(null);
+    if (!modelCache[name]) {
+      modelCache[name] = new Promise(function (resolve) {
+        gltf.load(MODELS + name + '.glb',
+          function (result) { resolve(result.scene); },
+          undefined,
+          function () { resolve(null); });
+      });
+    }
+    return modelCache[name];
+  }
+
+  var fitBox = new THREE.Box3();
+  var fitSize = new THREE.Vector3();
+  var fitCentre = new THREE.Vector3();
+
+  // Scales a model to the size the game was laid out for and stands it on
+  // the floor, centred on its own footprint.
+  function fitModel(model, target, axis) {
+    fitBox.setFromObject(model);
+    fitBox.getSize(fitSize);
+    var span = axis === 'height' ? fitSize.y : Math.max(fitSize.x, fitSize.z);
+    if (span > 0.0001) model.scale.setScalar(target / span);
+    fitBox.setFromObject(model);
+    fitBox.getCentre ? fitBox.getCentre(fitCentre) : fitBox.getCenter(fitCentre);
+    model.position.x -= fitCentre.x;
+    model.position.z -= fitCentre.z;
+    model.position.y -= fitBox.min.y;
+    model.traverse(function (node) {
+      if (node.isMesh) { node.castShadow = true; node.receiveShadow = true; }
+    });
+    return model;
+  }
+
+  function clearPlaceholders(group) {
+    var drop = [];
+    group.children.forEach(function (child) {
+      if (child.userData && child.userData.pick) return;
+      if (child.userData && child.userData.keep) return;
+      if (child.isMesh && child.material && child.material.visible === false) return;
+      drop.push(child);
+    });
+    drop.forEach(function (child) { group.remove(child); });
+  }
+
+  // Swaps the placeholder geometry of a finished group for a real model.
+  function dressGroup(group, name, target, axis, after) {
+    loadModel(name).then(function (proto) {
+      if (!proto) return;
+      var model = fitModel(proto.clone(true), target, axis || 'width');
+      clearPlaceholders(group);
+      group.add(model);
+      if (after) after(model);
+    });
+  }
+
+  // Kenney parts share materials, so each plant gets its own copies before the
+  // colour is changed - otherwise one thirsty plant would discolour them all.
+  function ownMaterials(model) {
+    var green = [];
+    var other = [];
+    model.traverse(function (node) {
+      if (!node.isMesh || !node.material) return;
+      var list = Array.isArray(node.material) ? node.material : [node.material];
+      var copies = list.map(function (source) {
+        var copy = source.clone();
+        var c = copy.color;
+        if (c && c.g > c.r * 1.04 && c.g > c.b * 1.04) green.push(copy); else other.push(copy);
+        return copy;
+      });
+      node.material = copies.length === 1 ? copies[0] : copies;
+      node.castShadow = true;
+      node.receiveShadow = true;
+    });
+    return { green: green, other: other };
+  }
+
+  var PLANT_MODELS = {
+    bush: 'plantSmall1', fern: 'plantSmall1', flower: 'pottedPlant', palm: 'pottedPlant',
+    blades: 'plantSmall3', trailing: 'plantSmall3', cactus: 'plantSmall2',
+    succulent: 'plantSmall2', column: 'plantSmall2'
+  };
+
+  function dressPlant(group, species) {
+    loadModel(PLANT_MODELS[species.style] || 'plantSmall1').then(function (proto) {
+      if (!proto) return;
+      var model = proto.clone(true);
+      var mats = ownMaterials(model);
+      fitModel(model, 0.46, 'height');
+      clearPlaceholders(group);
+      group.add(model);
+      group.userData.foliage = model;
+      if (mats.green.length) {
+        group.userData.tintMats = mats.green;
+        mats.green.forEach(function (m) { m.color.copy(group.userData.baseLeaf); });
+      }
+      if (mats.other.length) group.userData.potMats = mats.other;
+    });
+  }
 
   // ----------------------------------------------------------------- pieces
   var woodMat = new THREE.MeshStandardMaterial({ color: '#b47c42', roughness: 0.72 });
@@ -837,9 +946,12 @@
     markShadow(g);
     g.userData.foliage = foliage;
     g.userData.leafMat = mat;
+    g.userData.tintMats = [mat];
     g.userData.baseLeaf = new THREE.Color(species.leaf);
     g.userData.potMat = potMat;
+    g.userData.potMats = [potMat];
     g.userData.baseScale = scale || 1;
+    dressPlant(g, species);
     return g;
   }
 
@@ -957,6 +1069,12 @@
   var shelfE = buildShelf(-1.2, -1.6, 0, 'Pflanztisch', { boards: [0.4, 0.86], width: 1.6, depth: 0.62, perBoard: 3 });
 
   // The shop starts nearly bare on purpose: growth has to be visible.
+  dressGroup(shelfA.group, 'bookcaseOpen', 1.86, 'height');
+  dressGroup(shelfB.group, 'bookcaseClosedWide', 1.86, 'height');
+  dressGroup(shelfC.group, 'bookcaseOpen', 2.14, 'height');
+  dressGroup(shelfD.group, 'bookcaseOpenLow', 1.86, 'height');
+  dressGroup(shelfE.group, 'desk', 1.6, 'width');
+
   [shelfA, shelfB, shelfC, shelfD, shelfE].forEach(function (unit) {
     unit.group.visible = false;
     unit.group.scale.setScalar(0.01);
@@ -1000,6 +1118,12 @@
   counter.rotation.y = 0.32;
   markShadow(counter);
   scene.add(counter);
+
+  deskPc.userData.keep = true;
+  dressGroup(counter, 'kitchenBar', 2.2, 'width');
+  dressGroup(deskPc, 'computerScreen', 0.46, 'height', function (model) {
+    model.traverse(function (node) { if (node.isMesh) node.userData.pc = true; });
+  });
 
   // Two boards held by angle brackets. Nothing touches the floor, so this only
   // makes sense mounted against a wall.
@@ -1089,6 +1213,7 @@
   table.position.set(1.1, 0, 0.5);
   markShadow(table);
   scene.add(table);
+  dressGroup(table, 'table', 1.7, 'width');
   var tableUnit = registerSurface(table, 'Mitteltisch', [
     { tier: 0, x: -0.5, y: 0.83, z: 0, plant: null },
     { tier: 0, x: 0.1, y: 0.83, z: -0.2, plant: null },
@@ -1205,6 +1330,7 @@
   ], 1.7, 0.8);
   wallShelfUnit.wall = true;
 
+  dressGroup(bench, 'bench', 3.2, 'width');
   var benchUnit = registerSurface(bench, 'Auslage vorne', [
     { tier: 0, x: -1.25, y: 0.565, z: 0, plant: null },
     { tier: 0, x: -0.63, y: 0.565, z: 0, plant: null },
@@ -1823,7 +1949,7 @@
     info.pot = pot.id;
     // Value is set, not stacked, so repotting can never be farmed for coins.
     info.price = info.species.price + pot.value;
-    picked.userData.potMat.color.set(pot.colour);
+    picked.userData.potMats.forEach(function (m) { m.color.set(pot.colour); });
     picked.scale.setScalar(picked.userData.baseScale * pot.scale);
     picked.userData.pop = 1;
     el.potSheet.hidden = true;
@@ -2402,7 +2528,7 @@
     crates.forEach(function (crate, i) {
       crate.position.set(
         DELIVERY.x - 0.42 + (i % 2) * 0.84,
-        0.26,
+        0,
         DELIVERY.z - 0.4 + Math.floor(i / 2) * 0.8
       );
     });
@@ -2410,10 +2536,17 @@
 
   function deliverUnit(unit, name) {
     unit.ordered = true;
-    var crate = new THREE.Mesh(new THREE.BoxGeometry(0.66, 0.52, 0.66), crateMat2);
+    var crate = new THREE.Group();
+    var placeholder = new THREE.Mesh(new THREE.BoxGeometry(0.66, 0.52, 0.66), crateMat2);
+    placeholder.position.y = 0.26;
+    placeholder.castShadow = placeholder.receiveShadow = true;
+    crate.add(placeholder);
     crate.rotation.y = (Math.random() - 0.5) * 0.5;
-    crate.castShadow = crate.receiveShadow = true;
     crate.userData.crate = unit;
+    dressGroup(crate, 'cardboardBoxClosed', 0.66, 'width', function () {
+      crate.traverse(function (node) { node.userData.crate = unit; });
+    });
+    crate.traverse(function (node) { node.userData.crate = unit; });
     unit.crate = crate;
     scene.add(crate);
     crates.push(crate);
@@ -2829,7 +2962,7 @@
   function killPlant(plant) {
     var info = plant.userData.pick;
     info.dead = true;
-    plant.userData.leafMat.color.copy(DEAD_COLOUR);
+    plant.userData.tintMats.forEach(function (m) { m.color.copy(DEAD_COLOUR); });
     var foliage = plant.userData.foliage;
     if (foliage) {
       foliage.scale.set(0.86, 0.48, 0.86);
@@ -2856,7 +2989,9 @@
 
       // Colour and droop track thirst, so a dry shelf is readable at a glance.
       var thirst = 1 - Math.min(1, info.water / 0.35);
-      plant.userData.leafMat.color.copy(plant.userData.baseLeaf).lerp(DRY_COLOUR, thirst * 0.8);
+      plant.userData.tintMats.forEach(function (m) {
+        m.color.copy(plant.userData.baseLeaf).lerp(DRY_COLOUR, thirst * 0.8);
+      });
       if (plant.userData.foliage && !plant.userData.pop) {
         plant.userData.foliage.rotation.z = thirst * 0.13;
       }
