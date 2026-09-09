@@ -821,8 +821,12 @@
   sun.shadow.camera.bottom = -9;
   sun.shadow.camera.near = 1;
   sun.shadow.camera.far = 34;
-  sun.shadow.bias = -0.0007;
-  sun.shadow.normalBias = 0.02;
+  // normalBias 0.02 schob den Schattenansatz weiter vom Objekt weg, als ein
+  // Topf breit ist. Der Schatten loeste sich dadurch vom Fuss - und genau das
+  // laesst Dinge schweben. Bei Schattenflimmern auf dem Boden wieder in
+  // 0.002er Schritten anheben.
+  sun.shadow.bias = -0.0004;
+  sun.shadow.normalBias = 0.012;
   scene.add(sun);
 
   // Cool fill from the open side lifts the faces the sun cannot reach.
@@ -894,15 +898,30 @@
     drop.forEach(function (child) { group.remove(child); });
   }
 
-  // Swaps the placeholder geometry of a finished group for a real model.
-  // A model's shelves never sit where the placeholder's did, so every slot is
-  // dropped onto the model and lands on the first surface it meets.
-  var slotRay = new THREE.Raycaster();
-  var slotDown = new THREE.Vector3(0, -1, 0);
-  var slotFrom = new THREE.Vector3();
+  // ---------------------------------------------------------------- aufsetzen
+  // Hier entscheidet sich, ob eine Pflanze auf dem Brett steht oder darueber
+  // schwebt. Die alte Fassung schoss fuer JEDE Etage einen Strahl von y = 3.4
+  // nach unten und nahm den ersten Treffer - also fuer alle Etagen dieselbe
+  // Deckplatte. Ging der Strahl daneben, blieb die Entwurfshoehe stehen, und
+  // die Bretter waren zu diesem Zeitpunkt schon geloescht. Nachgemessen: 22
+  // Slots standen ueber nichts, 26 steckten ineinander.
+  //
+  // Jetzt startet der Strahl knapp ueber der Entwurfshoehe des eigenen Slots,
+  // nimmt nur nach oben zeigende Flaechen und nur die hoechste im eigenen Fach.
+  // Findet er nichts, wird der Slot stillgelegt statt bepflanzt. Gemessen wird
+  // gegen das, was gerade in der Gruppe haengt - gebaute Bretter genauso wie
+  // ein geladenes Modell. Deshalb greift es auch bei Wandregal, Haengeregal
+  // und Beet, die nie ein Modell bekommen.
+  var seatRay = new THREE.Raycaster();
+  var seatDown = new THREE.Vector3(0, -1, 0);
+  var seatUp = new THREE.Vector3(0, 1, 0);
+  var seatFrom = new THREE.Vector3();
+  var seatPoint = new THREE.Vector3();
+  var seatNM = new THREE.Matrix3();
+  var seatN = new THREE.Vector3();
 
-  function alignSlots(unit, model) {
-    if (!unit || !unit.slots) return;
+  function seatSlot(unit, slot) {
+    if (!unit || !slot) return false;
     var group = unit.group;
     var wasVisible = group.visible;
     var wasScale = group.scale.x;
@@ -910,19 +929,61 @@
     group.scale.setScalar(1);
     group.updateWorldMatrix(true, true);
 
-    unit.slots.forEach(function (slot) {
-      slotFrom.set(slot.x, 3.4, slot.z);
-      group.localToWorld(slotFrom);
-      slotRay.set(slotFrom, slotDown);
-      var hits = slotRay.intersectObject(model, true);
-      if (!hits.length) return;
-      var local = group.worldToLocal(hits[0].point.clone());
-      slot.y = local.y + 0.012;
-      if (slot.plant) slot.plant.position.y = slot.y;
-    });
+    // Trefferbox und schon gesetzte Pflanzen sind keine Ablage.
+    var probe = [];
+    for (var c = 0; c < group.children.length; c++) {
+      var child = group.children[c];
+      if (child.userData && (child.userData.pick || child.userData.shelf)) continue;
+      probe.push(child);
+    }
+
+    if (slot.baseY === undefined) slot.baseY = slot.y;
+    seatFrom.set(slot.x, slot.baseY + 0.30, slot.z);
+    group.localToWorld(seatFrom);
+    seatRay.set(seatFrom, seatDown);
+    seatRay.far = 0.62;
+    var down = seatRay.intersectObjects(probe, true);
+    seatRay.far = Infinity;
+
+    var top = null;
+    for (var i = 0; i < down.length; i++) {
+      var hit = down[i];
+      if (!hit.face) continue;
+      seatNM.getNormalMatrix(hit.object.matrixWorld);
+      seatN.copy(hit.face.normal).applyMatrix3(seatNM).normalize();
+      if (seatN.y < 0.5) continue;
+      var ly = group.worldToLocal(seatPoint.copy(hit.point)).y;
+      if (top === null || ly > top) top = ly;
+    }
+
+    if (top === null) {
+      slot.y = slot.baseY;
+      slot.dead = true;
+      slot.room = 0.9;
+    } else {
+      slot.dead = false;
+      slot.y = top + (slot.lift === undefined ? 0.004 : slot.lift);
+      // Lichte Hoehe bis zum Fach darueber, damit keine Pflanze durch das
+      // naechste Brett waechst.
+      seatFrom.set(slot.x, slot.y + 0.02, slot.z);
+      group.localToWorld(seatFrom);
+      seatRay.set(seatFrom, seatUp);
+      seatRay.far = 0.95;
+      var up = seatRay.intersectObjects(probe, true);
+      seatRay.far = Infinity;
+      slot.room = up.length ? Math.max(0.18, up[0].distance - 0.05) : 0.9;
+    }
+
+    if (slot.plant) slot.plant.position.set(slot.x, slot.y, slot.z);
 
     group.visible = wasVisible;
     group.scale.setScalar(wasScale);
+    return !slot.dead;
+  }
+
+  function seatUnit(unit) {
+    if (!unit || !unit.slots) return;
+    for (var i = 0; i < unit.slots.length; i++) seatSlot(unit, unit.slots[i]);
   }
 
   // Die fertigen Moebelmodelle sind fast weiss. Neben dem gemalten Boden sehen
@@ -983,9 +1044,15 @@
     return { green: green, other: other };
   }
 
+  // Zwei Modelle sind vermessen und waren an den schwebenden Pflanzen auf den
+  // Wandregalen schuld: pp_ouuqhkrsul ist eine Haengeampel - der Topfboden
+  // liegt weit ueber der Modellunterkante, auf einem Brett schwebt sie 20 cm,
+  // und die Aufhaengekette zeigt ins Nichts. pp_auhzqhajhd hat einen gedrehten
+  // Knoten mit negativer Skalierung; die Bounding-Box faellt dadurch zu gross
+  // aus, was 6 cm Luft und 20 Prozent Untergroesse ergibt. Beide raus - das
+  // betraf sechs von 24 Arten.
   var PLANT_MODELS = ['pp_bfloqiv5up', 'pp_7ig0hcyft93', 'pp_kgt363wkkd', 'pp_f6gpjbegg0',
-    'pp_8kmkyzaqwjp', 'pp_ouuqhkrsul', 'pp_auhzqhajhd', 'pp_wpqra4ewsx',
-    'pp_e9ortct6js', 'pp_iblx2jz90o'];
+    'pp_8kmkyzaqwjp', 'pp_wpqra4ewsx', 'pp_e9ortct6js', 'pp_iblx2jz90o'];
 
   function modelForSpecies(species) {
     var sum = 0;
@@ -999,9 +1066,27 @@
       var model = proto.clone(true);
       var mats = ownMaterials(model);
       fitModel(model, 0.46, 'height');
+      // Auf Hoehe skaliert werden manche Modelle ueber 0.6 m breit. Ein
+      // Wandbrett ist 0.32 m tief - das Laub haengt dann vorn und hinten ueber
+      // die Kante und liest sich genau wie "schwebt". Also zusaetzlich gegen
+      // die Grundflaeche begrenzen.
+      fitBox.setFromObject(model);
+      fitBox.getSize(fitSize);
+      var wide = Math.max(fitSize.x, fitSize.z);
+      if (wide > 0.38) {
+        var shrink = 0.38 / wide;
+        model.scale.multiplyScalar(shrink);
+        model.position.multiplyScalar(shrink);
+      }
       clearPlaceholders(group);
-      group.add(model);
-      group.userData.foliage = model;
+      // Huelle mit Skalierung 1: Giessen, Umtopfen und Verduersten setzen
+      // userData.foliage absolut. Ohne die Huelle springt jede Modellpflanze
+      // beim ersten Giessen auf ihre Rohgroesse - eines der Modelle ist nativ
+      // knapp 200 Einheiten hoch.
+      var holder = new THREE.Group();
+      holder.add(model);
+      group.add(holder);
+      group.userData.foliage = holder;
       if (mats.green.length) {
         group.userData.tintMats = mats.green.map(function (m) {
           return { m: m, base: m.color.clone() };
@@ -1097,6 +1182,42 @@
   function speciesByName(name) {
     for (var i = 0; i < SPECIES.length; i++) if (SPECIES[i].name === name) return SPECIES[i];
     return SPECIES[0];
+  }
+
+  // Die Schattenkarte der Sonne deckt 18 m auf 2048 Pixel ab - gut acht
+  // Millimeter pro Punkt. Auf einem Regalbrett kommt davon nichts an, und ohne
+  // einen Fleck unter dem Topf sieht jede Pflanze aus, als schwebe sie, selbst
+  // wenn sie exakt aufsitzt. Genau so erdet die gemalte Vorlage ihre Objekte.
+  // Eine Textur, ein Material, eine Geometrie fuer alle.
+  var blobTex = (function () {
+    var c = document.createElement('canvas');
+    c.width = c.height = 64;
+    var g = c.getContext('2d');
+    var r = g.createRadialGradient(32, 32, 2, 32, 32, 31);
+    r.addColorStop(0, 'rgba(58,38,20,0.50)');
+    r.addColorStop(0.55, 'rgba(58,38,20,0.22)');
+    r.addColorStop(1, 'rgba(58,38,20,0)');
+    g.fillStyle = r;
+    g.fillRect(0, 0, 64, 64);
+    var t = new THREE.CanvasTexture(c);
+    t.encoding = THREE.sRGBEncoding;
+    return t;
+  })();
+  var blobGeo = new THREE.PlaneGeometry(1, 1);
+  var blobMat = new THREE.MeshBasicMaterial({
+    map: blobTex, transparent: true, depthWrite: false, opacity: 0.9
+  });
+
+  function contactBlob(parent, size) {
+    var b = new THREE.Mesh(blobGeo, blobMat);
+    b.rotation.x = -Math.PI / 2;
+    b.position.y = 0.004;
+    b.scale.setScalar(size || 0.42);
+    b.renderOrder = 2;
+    b.userData.keep = true;      // ueberlebt clearPlaceholders in dressPlant
+    b.raycast = function () {};  // darf keinen Tipp abfangen
+    parent.add(b);
+    return b;
   }
 
   function buildPlant(species, scale) {
@@ -1211,6 +1332,7 @@
     g.add(foliage);
     g.scale.setScalar(scale || 1);
     markShadow(g);
+    contactBlob(g, 0.42);   // nach markShadow, damit der Fleck keinen Schatten wirft
     g.userData.foliage = foliage;
     g.userData.leafMat = mat;
     g.userData.tintMats = [{ m: mat, base: new THREE.Color(species.leaf) }];
@@ -1312,8 +1434,23 @@
     return shelf;
   }
 
+  // dressPlant skaliert jedes Modell auf exakt dieselbe Hoehe - zwoelf Pflanzen
+  // auf einem Brett ergeben dadurch eine waagerechte Linie, die sich wie ein
+  // Warenregal liest statt wie ein Laden. Zielhoehe pro Wuchsform, gedeckelt
+  // durch die lichte Fachhoehe, die seatSlot gemessen hat.
+  var PLANT_HEIGHT = {
+    succulent: 0.30, cactus: 0.34, flower: 0.40, trailing: 0.40,
+    fern: 0.44, column: 0.46, bush: 0.50, blades: 0.54, palm: 0.60
+  };
+
   function fillSlot(shelf, slot, species) {
-    var plant = buildPlant(species, 1);
+    if (slot.room === undefined) seatSlot(shelf, slot);
+    var want = Math.min(PLANT_HEIGHT[species.style] || 0.46, (slot.room || 0.9) - 0.04);
+    var plant = buildPlant(species, (want / 0.46) * (0.94 + Math.random() * 0.12));
+    // Die Drehung haengt am Slot, nicht an der Pflanze: so bleibt die Anordnung
+    // erhalten, wenn eine Pflanze verkauft und der Platz neu belegt wird.
+    if (slot.spin === undefined) slot.spin = Math.random() * Math.PI * 2;
+    plant.rotation.y = slot.spin;
     plant.position.set(slot.x, slot.y, slot.z);
     shelf.group.add(plant);
     slot.plant = plant;
@@ -1324,6 +1461,7 @@
       water: 0.25 + Math.random() * 0.5
     };
     plant.traverse(function (n) { if (n.isMesh) n.userData.owner = plant; });
+    seatSlot(shelf, slot);
     sellables.push(plant);
     return plant;
   }
@@ -1337,14 +1475,20 @@
 
   // The shop starts nearly bare on purpose: growth has to be visible.
   function dressUnit(unit, name, target, axis) {
-    dressGroup(unit.group, name, target, axis, function (model) { alignSlots(unit, model); });
+    dressGroup(unit.group, name, target, axis, function () { seatUnit(unit); });
   }
 
-  dressUnit(shelfA, 'bookcaseOpen', 1.86, 'height');
-  dressUnit(shelfB, 'bookcaseClosedWide', 1.86, 'height');
-  dressUnit(shelfC, 'bookcaseOpen', 2.14, 'height');
-  dressUnit(shelfD, 'bookcaseOpenLow', 1.86, 'height');
-  dressUnit(shelfE, 'desk', 0.88, 'height');
+  // Die fertigen Moebelmodelle sind auf rund 0.4 m Modulbreite gezeichnet, das
+  // Layout hier will 1.1 bis 3.2 m. Auf Hoehe skaliert bleibt vom Regal ein
+  // 0.85 m schmaler Korpus in einer 1.9 m breiten Luecke stehen, aus dem
+  // niedrigen Regal wird ein 1.86-m-Wuerfel und aus der Bank ein Hocker. Die
+  // gebauten Regale treffen die Layoutmasse exakt und tragen das gemalte Holz -
+  // also bleiben sie. Der Tisch unten passt und bleibt bestueckt.
+  // dressUnit(shelfA, 'bookcaseOpen', 1.86, 'height');
+  // dressUnit(shelfB, 'bookcaseClosedWide', 1.86, 'height');
+  // dressUnit(shelfC, 'bookcaseOpen', 2.14, 'height');
+  // dressUnit(shelfD, 'bookcaseOpenLow', 1.86, 'height');
+  // dressUnit(shelfE, 'desk', 0.88, 'height');
 
   [shelfA, shelfB, shelfC, shelfD, shelfE].forEach(function (unit) {
     unit.group.visible = false;
@@ -1633,7 +1777,9 @@
     { tier: 0, x: 0.63, y: 0.565, z: 0, plant: null },
     { tier: 0, x: 1.25, y: 0.565, z: 0, plant: null }
   ], 3.4, 1);
-  dressUnit(benchUnit, benchPending, 0.52, 'height');
+  // Die Bank waere auf 0.52 m Hoehe nur 0.44 m breit - vier von fuenf Pflanzen
+  // staenden neben dem Moebel in der Luft. Die gebaute Auslage passt.
+  // dressUnit(benchUnit, benchPending, 0.52, 'height');
 
   // --------------------------------------------------------------- greenery
   // Frueher hingen hier Blattgirlanden, eine Blattwand und Ranken an den
@@ -2337,7 +2483,9 @@
     shelves.forEach(function (shelf) {
       if (!shelf.built) return;
       shelf.slots.forEach(function (slot) {
-        if (!slot.plant) free.push({ shelf: shelf, slot: slot });
+        // slot.dead: seatSlot hat unter diesem Platz keine Ablage gefunden.
+        // Frueher wurde trotzdem bepflanzt - das Ergebnis stand in der Luft.
+        if (!slot.plant && !slot.dead) free.push({ shelf: shelf, slot: slot });
       });
     });
     return free;
@@ -2366,6 +2514,7 @@
     var bed = { group: group, hit: hit, slots: slots, label: label, built: true };
     hit.userData.shelf = bed;
     shelves.push(bed);
+    seatUnit(bed);
     return bed;
   }
 
@@ -2978,6 +3127,7 @@
     var unit = placing.unit;
     unit.built = true;
     unit.ordered = false;
+    seatUnit(unit);
     if (!unit.obstacle) {
       unit.obstacle = { x: 0, z: 0, r: 1.2, active: true };
       OBSTACLES.push(unit.obstacle);
@@ -3042,14 +3192,17 @@
   function movePlantTo(shelf) {
     var free = null;
     for (var i = 0; i < shelf.slots.length; i++) {
-      if (!shelf.slots[i].plant) { free = shelf.slots[i]; break; }
+      if (!shelf.slots[i].plant && !shelf.slots[i].dead) { free = shelf.slots[i]; break; }
     }
     if (!free) { say('Kein freier Platz auf ' + shelf.label + '.'); return; }
     var info = movingPlant.userData.pick;
     if (info.slot) info.slot.plant = null;
     shelf.group.add(movingPlant);
     movingPlant.position.set(free.x, free.y, free.z);
+    if (free.spin === undefined) free.spin = Math.random() * Math.PI * 2;
+    movingPlant.rotation.y = free.spin;
     free.plant = movingPlant;
+    seatSlot(shelf, free);
     info.slot = free;
     info.shelf = shelf;
     say(info.species.name + ' steht jetzt auf: ' + shelf.label + '.');
