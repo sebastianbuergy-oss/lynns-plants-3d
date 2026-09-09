@@ -542,7 +542,7 @@
   floorTex.repeat.set(ROOM_W * 1.7, ROOM_D * 1.7);
   var floor = new THREE.Mesh(
     new THREE.PlaneGeometry(ROOM_W, ROOM_D),
-    new THREE.MeshStandardMaterial({ map: floorTex, roughness: 0.92 })
+    new THREE.MeshStandardMaterial({ map: floorTex, roughness: 0.72, metalness: 0.04 })
   );
   floor.rotation.x = -Math.PI / 2;
   floor.receiveShadow = true;
@@ -557,7 +557,7 @@
   // it, so the shop can be turned a full circle and always stays readable.
   function makeWall(cx, cz, rotY, span, nx, nz, repeatX) {
     var group = new THREE.Group();
-    var tex = plankTexture('#2f4a2b', 'rgba(18,32,16,.6)');
+    var tex = plankTexture('#355430', 'rgba(18,32,16,.55)');
     tex.repeat.set(repeatX, 1.5);
     var mesh = new THREE.Mesh(
       new THREE.PlaneGeometry(span, WALL_H),
@@ -609,24 +609,49 @@
   pavement.receiveShadow = true;
   scene.add(pavement);
 
+  // A faint darkening at the edges stands in for the shading a real corner
+  // collects. Cheap, and it stops the floor reading as a flat sheet.
+  var aoCanvas = document.createElement('canvas');
+  aoCanvas.width = aoCanvas.height = 256;
+  var aoCtx = aoCanvas.getContext('2d');
+  var aoGrad = aoCtx.createRadialGradient(128, 128, 40, 128, 128, 128);
+  aoGrad.addColorStop(0, 'rgba(0,0,0,0)');
+  aoGrad.addColorStop(0.62, 'rgba(0,0,0,0)');
+  aoGrad.addColorStop(1, 'rgba(12,24,12,0.42)');
+  aoCtx.fillStyle = aoGrad;
+  aoCtx.fillRect(0, 0, 256, 256);
+  var aoTex = new THREE.CanvasTexture(aoCanvas);
+  var aoPlane = new THREE.Mesh(
+    new THREE.PlaneGeometry(ROOM_W, ROOM_D),
+    new THREE.MeshBasicMaterial({ map: aoTex, transparent: true, depthWrite: false })
+  );
+  aoPlane.rotation.x = -Math.PI / 2;
+  aoPlane.position.y = 0.008;
+  scene.add(aoPlane);
+
   // ------------------------------------------------------------------ light
   // Kept deliberately low: fill light this strong washes out the very contact
   // shadows the prototype exists to demonstrate.
   scene.add(new THREE.HemisphereLight('#9dc0d4', '#2f3f24', 0.5));
 
-  var sun = new THREE.DirectionalLight('#ffe6bc', 1.45);
+  var sun = new THREE.DirectionalLight('#ffe3ae', 1.55);
   sun.position.set(7.5, 9.5, 5);
   sun.castShadow = true;
   sun.shadow.mapSize.set(2048, 2048);
-  sun.shadow.camera.left = -11;
-  sun.shadow.camera.right = 11;
-  sun.shadow.camera.top = 11;
-  sun.shadow.camera.bottom = -11;
+  sun.shadow.camera.left = -9;
+  sun.shadow.camera.right = 9;
+  sun.shadow.camera.top = 9;
+  sun.shadow.camera.bottom = -9;
   sun.shadow.camera.near = 1;
   sun.shadow.camera.far = 34;
   sun.shadow.bias = -0.0007;
   sun.shadow.normalBias = 0.02;
   scene.add(sun);
+
+  // Cool fill from the open side lifts the faces the sun cannot reach.
+  var fill = new THREE.DirectionalLight('#bcd4e8', 0.42);
+  fill.position.set(-5, 4.5, 9);
+  scene.add(fill);
 
   var lamp = new THREE.PointLight('#ffb765', 0.6, 10, 2);
   lamp.position.set(-3.4, 2.8, -3.1);
