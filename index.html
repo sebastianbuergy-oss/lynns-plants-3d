@@ -456,7 +456,7 @@
   <!-- Die Versionsnummer steht sichtbar da, weil Safari die Seite gecacht hat
        und eine alte Fassung als "immer noch kaputt" durchging. Bei jeder
        Aenderung hochzaehlen. -->
-  <div class="mark"><b>Lynn's Plants</b><span>3D PROTOTYP &middot; V35</span></div>
+  <div class="mark"><b>Lynn's Plants</b><span>3D PROTOTYP &middot; V36</span></div>
   <div class="hud-right">
     <div class="level" id="levelBox"><b id="levelValue">LV 1</b><i><em id="levelFill"></em></i></div>
     <button class="coins" id="coinBtn" type="button"><i></i><b id="coinValue">1000</b><em>+</em></button>
@@ -2902,23 +2902,31 @@
   }
 
   // ------------------------------------------------------------------ Personal
-  // Zwei Anstellungen, die erst ab einer Stufe zu haben sind. Die Kassiererin
+  // Drei Anstellungen, die erst ab einer Stufe zu haben sind. Die Kassiererin
   // steht an der Theke und holt fuenfzehn Prozent mehr heraus; der Lagerist
   // laeuft herum und giesst, was am ehesten eingeht - das ist die Arbeit, die
-  // sonst von Hand anfaellt und die man beim Einrichten leicht vergisst.
+  // sonst von Hand anfaellt und die man beim Einrichten leicht vergisst. Die
+  // Filialleiterin ab Stufe 10 bestellt selber nach.
   var kassiererin = null;
   var lagerist = null;
   var lagerZiel = null;
   var lagerPause = 0;
+  var leiterin = null;
+  var leiterZiel = null;
+  var leiterPause = 6;
 
   var PERSONAL = [
     {
-      id: 'cashier', name: 'Kassiererin', kosten: 320, stufe: 3,
+      id: 'cashier', name: 'Kassiererin', kosten: 320, stufe: 3, icon: '🧑‍🌾',
       note: 'Steht an der Kasse und holt 15% mehr aus jedem Verkauf.'
     },
     {
-      id: 'keeper', name: 'Lagerist', kosten: 480, stufe: 5,
+      id: 'keeper', name: 'Lagerist', kosten: 480, stufe: 5, icon: '📦',
       note: 'Läuft durch den Laden und giesst, was am ehesten eingeht.'
+    },
+    {
+      id: 'manager', name: 'Filialleiterin', kosten: 20000, stufe: 10, icon: '📋',
+      note: 'Bestellt selbständig nach und räumt freie Plätze wieder ein.'
     }
   ];
 
@@ -2948,6 +2956,19 @@
       window.__inspect.lagerist = lagerist;
       say('Der Lagerist fängt an zu giessen.');
     }
+    if (id === 'manager' && !leiterin) {
+      leiterin = buildPerson({
+        skin: '#e0b28d', top: '#4a4f6b', legs: '#2f3138',
+        inner: '#efe7d6', hair: '#5a3a24', shoes: '#3f342a',
+        bun: true, speed: 1.5, stride: 1.28
+      });
+      leiterin.pos.set(-1.1, 1.4);
+      leiterin.heading = Math.PI;
+      leiterin.root.position.set(-1.1, 0, 1.4);
+      contactBlob(leiterin.root, 0.6);
+      window.__inspect.leiterin = leiterin;
+      say('Die Filialleiterin bestellt ab jetzt selbst nach.');
+    }
   }
 
   function pruefePersonal() {
@@ -2957,6 +2978,79 @@
         say('Stufe ' + p.stufe + ': ' + p.name + ' kann eingestellt werden.');
       }
     });
+  }
+
+  // Die Filialleiterin haelt das Sortiment in Ordnung: erst raeumt sie
+  // Eingegangenes weg, dann fuellt sie leere Plaetze wieder auf. Sie zahlt
+  // denselben Einkaufspreis wie der Spieler - sie druckt kein Geld, sie nimmt
+  // ihm nur das staendige Nachbestellen ab, und sie laesst ihm eine Reserve
+  // stehen, statt die Kasse leer zu kaufen. Zum Regal laeuft sie erst.
+  var LEITER_RESERVE = 150;
+
+  function stepLeiterin(dt) {
+    if (!leiterin) return;
+    leiterPause -= dt;
+    if (!leiterin.target && !leiterZiel && leiterPause <= 0) {
+      leiterPause = 10 + Math.random() * 6;
+      var tot = null;
+      for (var t = 0; t < sellables.length; t++) {
+        var kandidat = sellables[t];
+        if (kandidat.parent && kandidat.userData.pick.dead) { tot = kandidat; break; }
+      }
+      if (tot) {
+        var totInfo = tot.userData.pick;
+        leiterZiel = { shelf: totInfo.shelf, slot: totInfo.slot, weg: tot };
+        totInfo.shelf.hit.getWorldPosition(guestScratch);
+        walkTo(leiterin, guestScratch.x, guestScratch.z + 0.9);
+      } else {
+        var frei = openSlots();
+        if (frei.length) {
+          var arten = [];
+          PLANT_GROUPS.forEach(function (g) {
+            g.species.forEach(function (sp) { if (artFrei(sp)) arten.push(sp); });
+          });
+          if (arten.length) {
+            var art = arten[Math.floor(Math.random() * arten.length)];
+            var preis = Math.round(art.price * 0.55);
+            if (coins - preis >= LEITER_RESERVE) {
+              var platz = frei[0];
+              leiterZiel = { shelf: platz.shelf, slot: platz.slot, art: art, preis: preis };
+              platz.shelf.hit.getWorldPosition(guestScratch);
+              walkTo(leiterin, guestScratch.x, guestScratch.z + 0.9);
+            }
+          }
+        }
+      }
+    }
+    if (leiterZiel) {
+      leiterZiel.shelf.hit.getWorldPosition(guestScratch);
+      var nah = Math.hypot(guestScratch.x - leiterin.pos.x,
+                           guestScratch.z - leiterin.pos.y) < 2.1;
+      if (nah || !leiterin.target) {
+        var z = leiterZiel;
+        leiterZiel = null;
+        leiterin.target = null;
+        leiterPause = 2.5;
+        if (z.weg) {
+          var infoW = z.weg.userData.pick;
+          if (z.weg.parent && infoW.dead) {
+            if (infoW.slot) infoW.slot.plant = null;
+            var idx = sellables.indexOf(z.weg);
+            if (idx >= 0) sellables.splice(idx, 1);
+            z.weg.parent.remove(z.weg);
+            if (picked === z.weg) clearPick();
+            say('Filialleiterin: ' + infoW.species.name + ' entsorgt.');
+          }
+        // Zwischen Auftrag und Ankunft kann der Platz belegt worden sein.
+        } else if (!z.slot.plant && !z.slot.dead && coins - z.preis >= LEITER_RESERVE) {
+          setCoins(coins - z.preis);
+          var pflanze = fillSlot(z.shelf, z.slot, z.art);
+          pflanze.userData.pick.water = 0.8;
+          say('Filialleiterin: ' + z.art.name + ' nachbestellt (' + z.preis + ' Münzen).');
+        }
+      }
+    }
+    stepPerson(leiterin, dt);
   }
 
   function stepLagerist(dt) {
@@ -3110,7 +3204,13 @@
 
   // Fortschritt: jede verkaufte Pflanze bringt so viele Punkte, wie sie wert
   // war. Die Stufen wachsen, damit spaetere Stufen etwas bedeuten.
-  var STUFEN = [0, 160, 420, 850, 1500, 2400, 3600, 5200];
+  // Zwanzig Stufen statt acht. Die Abstaende wachsen, weil eine spaete Stufe
+  // sonst nichts bedeutet; jede neue Stufe zahlt eine Praemie aus, damit sie
+  // sich sofort anfuehlt und nicht nur eine Zahl in der Ecke ist.
+  var STUFEN = [
+    0, 160, 420, 850, 1500, 2400, 3600, 5200, 7300, 10000,
+    13500, 18000, 23500, 30000, 38000, 47500, 58500, 71000, 85000, 101000
+  ];
   var xp = 0;
   var level = 1;
 
@@ -3132,8 +3232,12 @@
     xp += punkte;
     var neu = stufeFuer(xp);
     if (neu > level) {
-      level = neu;
-      say('Stufe ' + level + ' erreicht.');
+      while (level < neu) {
+        level++;
+        var praemie = level * 120;
+        setCoins(coins + praemie);
+        say('Stufe ' + level + ' erreicht: ' + praemie + ' Münzen.');
+      }
       pruefePersonal();
     }
     zeigeLevel();
@@ -4249,7 +4353,7 @@
           var da = !!bought['personal-' + p.id];
           var offen = level >= p.stufe;
           list.appendChild(offerRow(
-            p.id === 'cashier' ? '🧑‍🌾' : '📦',
+            p.icon,
             p.name,
             da ? 'Angestellt.' : (offen ? p.note : 'Ab Stufe ' + p.stufe + ' – du bist auf ' + level + '.'),
             da ? 'Angestellt' : (offen ? p.kosten + ' ●' : 'Stufe ' + p.stufe),
@@ -4510,7 +4614,19 @@
     if (!picked) return;
     movingPlant = picked;
     clearPick();
-    say('Regal, Tisch oder Beet antippen – dorthin wird umgestellt.');
+    // Beim Umstellen muss man die anderen Regale sehen koennen. Vorher blieb
+    // die Kamera an dem Regal kleben, aus dem die Pflanze kam - das Ziel war
+    // gar nicht im Bild und liess sich nicht antippen.
+    focused = null;
+    el.back.classList.remove('on');
+    el.move.classList.remove('on');
+    goal.pitch = 0.72;
+    goal.dist = 18;
+    goal.target.copy(HOME.target);
+    var offen = openSlots().length;
+    say(offen
+      ? 'Regal, Tisch oder Beet antippen – ' + offen + ' freie Plätze.'
+      : 'Kein Platz frei. Nochmal antippen bricht ab.');
   });
 
   function movePlantTo(shelf) {
@@ -4870,6 +4986,26 @@
   var last = performance.now();
   var booted = false;
 
+  // Testhilfe: die Simulation ohne Bildaufbau vorspulen. Der Browser haelt
+  // requestAnimationFrame an, sobald das Fenster nicht zeichnet - ohne das
+  // hier laesst sich Laufverhalten nur im Sekundentakt pro Bildschirmfoto
+  // messen. Kostet im Spiel nichts, es ruft sie niemand auf.
+  window.__inspect.shelves = shelves;
+  window.__inspect.openSlots = openSlots;
+  window.__inspect.personal = PERSONAL;
+  window.__inspect.tick = function (schritte, dt) {
+    dt = dt || 1 / 60;
+    for (var k = 0; k < (schritte || 1); k++) {
+      stepPerson(lynn, dt);
+      stepGuest(dt);
+      if (kassiererin) stepPerson(kassiererin, dt);
+      stepLagerist(dt);
+      stepLeiterin(dt);
+      tendPlants(dt);
+    }
+    last = performance.now();
+  };
+
   function frame(now) {
     var dt = Math.min(0.05, (now - last) / 1000);
     last = now;
@@ -4878,6 +5014,7 @@
     stepGuest(dt);
     if (kassiererin) stepPerson(kassiererin, dt);
     stepLagerist(dt);
+    stepLeiterin(dt);
     tendPlants(dt);
     if (picked) refreshTray();
 
