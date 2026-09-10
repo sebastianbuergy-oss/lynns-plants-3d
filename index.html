@@ -281,13 +281,21 @@
   .sheet{
     position:fixed;inset:0;
     display:grid;place-items:center;
-    padding:16px;
+    /* Ohne diese Spalte bemisst sich das Gitter am Inhalt, und das `100%` in
+       der Kartenbreite bezieht sich dann auf genau diese Inhaltsbreite - die
+       Begrenzung greift also nie. Auf einem 375 px breiten iPhone war die
+       Bestellkarte dadurch 520 px breit und die Bestellknoepfe lagen 179 px
+       ausserhalb des Bildschirms: man konnte nichts antippen. */
+    grid-template-columns:minmax(0,1fr);
+    padding:16px max(16px,env(safe-area-inset-right)) 16px max(16px,env(safe-area-inset-left));
     background:rgba(10,20,12,.58);
     backdrop-filter:blur(4px);
     z-index:30;
   }
   .sheet-card{
     width:min(420px,100%);
+    max-width:100%;
+    justify-self:center;
     padding:16px 16px 12px;
     border-radius:18px;
     background:var(--cream);
@@ -319,7 +327,7 @@
     font:inherit;font-size:11px;font-weight:800;color:var(--ink);cursor:pointer;
   }
 
-  .sheet-card.wide{width:min(520px,100%)}
+  .sheet-card.wide{width:min(520px,100%);max-width:100%}
   .shop-head{display:flex;align-items:flex-start;justify-content:space-between;gap:12px}
   .shop-purse{
     display:flex;align-items:center;gap:6px;
@@ -372,7 +380,10 @@
   .offer b{font-size:12px}
   .offer small{font-size:10px;color:var(--ink-soft);line-height:1.35}
   .offer button{
+    /* 44 px ist die Mindestgroesse, die eine Fingerkuppe zuverlaessig trifft.
+       Vorher waren die Bestellknoepfe 47 x 32 gross. */
     flex:0 0 auto;border:0;font:inherit;
+    min-width:60px;min-height:44px;
     padding:8px 12px;border-radius:10px;
     background:var(--moss);color:var(--cream);
     font-size:11px;font-weight:800;cursor:pointer;
@@ -411,7 +422,7 @@
   <!-- Die Versionsnummer steht sichtbar da, weil Safari die Seite gecacht hat
        und eine alte Fassung als "immer noch kaputt" durchging. Bei jeder
        Aenderung hochzaehlen. -->
-  <div class="mark"><b>Lynn's Plants</b><span>3D PROTOTYP &middot; V10</span></div>
+  <div class="mark"><b>Lynn's Plants</b><span>3D PROTOTYP &middot; V11</span></div>
   <button class="coins" id="coinBtn" type="button"><i></i><b id="coinValue">1000</b><em>+</em></button>
 </header>
 
