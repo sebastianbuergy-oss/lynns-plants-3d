@@ -439,7 +439,7 @@
   <!-- Die Versionsnummer steht sichtbar da, weil Safari die Seite gecacht hat
        und eine alte Fassung als "immer noch kaputt" durchging. Bei jeder
        Aenderung hochzaehlen. -->
-  <div class="mark"><b>Lynn's Plants</b><span>3D PROTOTYP &middot; V22</span></div>
+  <div class="mark"><b>Lynn's Plants</b><span>3D PROTOTYP &middot; V23</span></div>
   <button class="coins" id="coinBtn" type="button"><i></i><b id="coinValue">1000</b><em>+</em></button>
 </header>
 
@@ -511,7 +511,13 @@
 
   var canvas = document.getElementById('scene');
   var renderer = new THREE.WebGLRenderer({ canvas: canvas, antialias: true });
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+  // Gemessen im vollen Laden: 598 Meshes, davon 394 Schattenwerfer - der
+  // Schattenpass zeichnet die also ein zweites Mal, macht rund tausend
+  // Zeichenaufrufe pro Bild. Das ist es, was das Drehen am Telefon zaeh macht,
+  // nicht die Dreiecke (nur 38000). Auf schmalen Schirmen deshalb weniger
+  // Bildpunkte und eine kleinere Schattenkarte.
+  var kleinerSchirm = Math.min(window.innerWidth, window.innerHeight) < 820;
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, kleinerSchirm ? 1.5 : 2));
   renderer.shadowMap.enabled = true;
   renderer.shadowMap.type = THREE.PCFSoftShadowMap;
   renderer.outputEncoding = THREE.sRGBEncoding;
@@ -802,36 +808,64 @@
   // erkennen - sichtbar bei jeder Drehung nach draussen. Jetzt sind es runde
   // Buesche in drei Gruentoenen, je Standort zwei bis drei ineinander
   // geschoben, damit eine durchgehende Hecke mit unruhiger Oberkante entsteht.
-  var hedgeMats = ['#456f3c', '#4e7a44', '#3c6435'].map(function (c) {
-    return new THREE.MeshStandardMaterial({ color: c, roughness: 0.94 });
-  });
+  // Als einzelne Meshes waren das 179 Zeichenaufrufe pro Bild - fast ein
+  // Drittel der ganzen Last, nur fuer Buesche, die sich nie bewegen. Als eine
+  // Instanz-Gruppe ist es genau einer, bei gleichem Aussehen: Lage, Groesse,
+  // Drehung und Farbton stecken pro Busch in der Matrix.
   var hedgeGeo = new THREE.SphereGeometry(0.78, 10, 8);
-
-  function hedgeClump(x, z) {
-    var count = 2 + Math.floor(Math.random() * 2);
-    for (var i = 0; i < count; i++) {
-      var bush = new THREE.Mesh(hedgeGeo, hedgeMats[(i + Math.floor(Math.random() * 3)) % 3]);
-      bush.position.set(
-        x + (Math.random() - 0.5) * 0.75,
-        0.42 + Math.random() * 0.42,
-        z + (Math.random() - 0.5) * 0.75
-      );
-      var s = 0.72 + Math.random() * 0.45;
-      bush.scale.set(s, s * (0.78 + Math.random() * 0.3), s);
-      bush.rotation.set(Math.random(), Math.random(), Math.random());
-      bush.castShadow = bush.receiveShadow = true;
-      scene.add(bush);
-    }
-  }
-
+  var hedgeTones = ['#456f3c', '#4e7a44', '#3c6435'].map(function (c) {
+    return new THREE.Color(c);
+  });
+  var hedgeSpots = [];
   for (var hx = -8; hx <= 8; hx += 1.15) {
-    hedgeClump(hx, -ROOM_D / 2 - 3.4);
-    hedgeClump(hx, ROOM_D / 2 + 7.4);
+    hedgeSpots.push([hx, -ROOM_D / 2 - 3.4], [hx, ROOM_D / 2 + 7.4]);
   }
   for (var hz = -ROOM_D / 2 - 3; hz <= ROOM_D / 2 + 7; hz += 1.15) {
-    hedgeClump(-ROOM_W / 2 - 3.2, hz);
-    hedgeClump(ROOM_W / 2 + 3.2, hz);
+    hedgeSpots.push([-ROOM_W / 2 - 3.2, hz], [ROOM_W / 2 + 3.2, hz]);
   }
+
+  var hedgeBushes = [];
+  hedgeSpots.forEach(function (spot) {
+    var count = 2 + Math.floor(Math.random() * 2);
+    for (var i = 0; i < count; i++) {
+      var s = 0.72 + Math.random() * 0.45;
+      hedgeBushes.push({
+        x: spot[0] + (Math.random() - 0.5) * 0.75,
+        y: 0.42 + Math.random() * 0.42,
+        z: spot[1] + (Math.random() - 0.5) * 0.75,
+        sx: s, sy: s * (0.78 + Math.random() * 0.3),
+        rx: Math.random(), ry: Math.random(), rz: Math.random(),
+        ton: hedgeTones[Math.floor(Math.random() * 3)]
+      });
+    }
+  });
+
+  var hedge = new THREE.InstancedMesh(
+    hedgeGeo,
+    new THREE.MeshStandardMaterial({ roughness: 0.94 }),
+    hedgeBushes.length
+  );
+  (function () {
+    var m = new THREE.Matrix4();
+    var e = new THREE.Euler();
+    var q = new THREE.Quaternion();
+    var pos = new THREE.Vector3();
+    var scl = new THREE.Vector3();
+    hedgeBushes.forEach(function (b, i) {
+      e.set(b.rx, b.ry, b.rz);
+      q.setFromEuler(e);
+      pos.set(b.x, b.y, b.z);
+      scl.set(b.sx, b.sy, b.sx);
+      m.compose(pos, q, scl);
+      hedge.setMatrixAt(i, m);
+      hedge.setColorAt(i, b.ton);
+    });
+    hedge.instanceMatrix.needsUpdate = true;
+    if (hedge.instanceColor) hedge.instanceColor.needsUpdate = true;
+  })();
+  hedge.castShadow = false;
+  hedge.receiveShadow = true;
+  scene.add(hedge);
 
   // A faint darkening at the edges stands in for the shading a real corner
   // collects. Cheap, and it stops the floor reading as a flat sheet.
@@ -868,7 +902,7 @@
   var sun = new THREE.DirectionalLight('#ffe6bb', 1.05);
   sun.position.set(2.5, 9, -1.5);
   sun.castShadow = true;
-  sun.shadow.mapSize.set(2048, 2048);
+  sun.shadow.mapSize.set(kleinerSchirm ? 1024 : 2048, kleinerSchirm ? 1024 : 2048);
   sun.shadow.camera.left = -9;
   sun.shadow.camera.right = 9;
   sun.shadow.camera.top = 9;
@@ -1100,7 +1134,7 @@
         return copy;
       });
       node.material = copies.length === 1 ? copies[0] : copies;
-      node.castShadow = true;
+      node.castShadow = false;
       node.receiveShadow = true;
     });
     return { green: green, other: other };
@@ -1277,9 +1311,14 @@
   var leafGeo = new THREE.SphereGeometry(1, 10, 7);
   var bladeGeo = new THREE.ConeGeometry(1, 1, 6);
 
-  function markShadow(obj) {
+  // Wer einen Schatten wirft, wird im Schattenpass ein zweites Mal gezeichnet.
+  // Deshalb werfen nur noch Dinge ab Moebelgroesse einen; Kleinteile bekommen
+  // ihren weichen Fleck und kosten nichts.
+  function markShadow(obj, klein) {
     obj.traverse(function (n) {
-      if (n.isMesh) { n.castShadow = true; n.receiveShadow = true; }
+      if (!n.isMesh) return;
+      n.castShadow = !klein;
+      n.receiveShadow = true;
     });
   }
 
@@ -1497,7 +1536,7 @@
 
     g.add(foliage);
     g.scale.setScalar(scale || 1);
-    markShadow(g);
+    markShadow(g, true);
     contactBlob(g, 0.42);   // nach markShadow, damit der Fleck keinen Schatten wirft
     g.userData.foliage = foliage;
     g.userData.leafMat = mat;
@@ -2057,7 +2096,8 @@
     var crate = new THREE.Mesh(new THREE.BoxGeometry(c[2], c[2] * 0.8, c[2]), crateMat);
     crate.position.set(c[0], c[2] * 0.4, c[1]);
     crate.rotation.y = Math.random();
-    crate.castShadow = crate.receiveShadow = true;
+    crate.castShadow = false;
+    crate.receiveShadow = true;
     scene.add(crate);
   });
 
@@ -2736,7 +2776,9 @@
   function setOrbit(yaw, pitch, dist) {
     orbit.yaw = goal.yaw = yaw;
     orbit.pitch = goal.pitch = Math.max(0.2, Math.min(1.05, pitch));
-    orbit.dist = goal.dist = Math.max(3, Math.min(15.5, dist));
+    // Bis 26 statt 15.5: von weiter weg sieht man den ganzen Laden samt
+    // Aussenbereich, und das braucht es, sobald Raeume dazukommen.
+    orbit.dist = goal.dist = Math.max(2.4, Math.min(26, dist));
   }
 
   function overview() {
