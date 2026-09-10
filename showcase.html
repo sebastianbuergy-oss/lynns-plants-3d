@@ -353,7 +353,9 @@
     width:14px;height:14px;border-radius:50%;
     background:radial-gradient(circle at 35% 30%,#ffe9a8,#e0aa46);
   }
-  .tabs{display:flex;gap:5px;margin:12px 0 10px;overflow-x:auto}
+  /* Mit dem vierten Reiter passt die Zeile auf einem schmalen Schirm nicht
+     mehr; umbrechen statt in einen Scrollstreifen schieben. */
+  .tabs{display:flex;flex-wrap:wrap;gap:6px;margin:12px 0 10px}
   .tabs button{
     flex:0 0 auto;border:0;font:inherit;
     min-height:44px;padding:7px 14px;border-radius:10px;
@@ -439,7 +441,7 @@
   <!-- Die Versionsnummer steht sichtbar da, weil Safari die Seite gecacht hat
        und eine alte Fassung als "immer noch kaputt" durchging. Bei jeder
        Aenderung hochzaehlen. -->
-  <div class="mark"><b>Lynn's Plants</b><span>3D PROTOTYP &middot; V23</span></div>
+  <div class="mark"><b>Lynn's Plants</b><span>3D PROTOTYP &middot; V24</span></div>
   <button class="coins" id="coinBtn" type="button"><i></i><b id="coinValue">1000</b><em>+</em></button>
 </header>
 
@@ -477,6 +479,7 @@
       <button type="button" data-tab="plants" class="on">Pflanzen</button>
       <button type="button" data-tab="build">Regale &amp; Räume</button>
       <button type="button" data-tab="decor">Deko</button>
+      <button type="button" data-tab="paint">Einrichten</button>
     </div>
     <div class="shop-list" id="shopList"></div>
     <button type="button" class="sheet-close" id="shopClose">Schliessen</button>
@@ -3339,8 +3342,85 @@
     });
   }
 
+  // Alle Regale, Bretter und Tische teilen sich woodMat, alle Waende wallUpMat
+  // und der Boden sein eigenes Material. Eine Ausfuehrung zu wechseln heisst
+  // deshalb nur, an einer Stelle die Textur zu tauschen - kein Suchen durch die
+  // Szene, und was spaeter gebaut wird, kommt gleich richtig heraus.
+  var finishTex = {};
+
+  function setSurface(mat, datei, wiederX, wiederY) {
+    var fertig = finishTex[datei];
+    if (fertig) {
+      mat.map = fertig;
+      mat.color.set('#ffffff');
+      mat.needsUpdate = true;
+      return;
+    }
+    texLoader.load(ART + datei + '.jpg', function (t) {
+      t.wrapS = t.wrapT = THREE.MirroredRepeatWrapping;
+      t.encoding = THREE.sRGBEncoding;
+      t.repeat.set(wiederX, wiederY);
+      t.anisotropy = maxAniso;
+      finishTex[datei] = t;
+      mat.map = t;
+      mat.color.set('#ffffff');
+      mat.needsUpdate = true;
+    });
+  }
+
+  // Preis einmal je Ausfuehrung: danach gehoert sie und laesst sich frei wechseln.
+  var HOLZ_AUSFUEHRUNGEN = [
+    { id: 'kiefer', name: 'Kiefer', cost: 0 },
+    { id: 'birke', name: 'Birke', cost: 22 },
+    { id: 'braun', name: 'Nussbaum', cost: 26 },
+    { id: 'sumpfeiche', name: 'Sumpfeiche', cost: 30 },
+    { id: 'schwarz', name: 'Schwarz', cost: 28 },
+    { id: 'weiss', name: 'Weiss', cost: 24 },
+    { id: 'rot', name: 'Rot', cost: 26 },
+    { id: 'graphit', name: 'Graphit', cost: 26 },
+    { id: 'salbei', name: 'Salbei', cost: 28 },
+    { id: 'taubenblau', name: 'Taubenblau', cost: 28 }
+  ];
+
+  var WAND_FARBEN = [
+    { id: 'creme', name: 'Creme', cost: 0 },
+    { id: 'salbei', name: 'Salbei', cost: 18 },
+    { id: 'terrakotta', name: 'Terrakotta', cost: 20 },
+    { id: 'taubenblau', name: 'Taubenblau', cost: 20 },
+    { id: 'warmgrau', name: 'Warmgrau', cost: 18 },
+    { id: 'altrosa', name: 'Altrosa', cost: 22 }
+  ];
+
+  var BODEN_BELAEGE = [
+    { id: 'floor', name: 'Gemalte Dielen', cost: 0, x: ROOM_W / 6, y: ROOM_D / 4.6 },
+    { id: 'holz-birke', name: 'Birke hell', cost: 26, x: ROOM_W / 5, y: ROOM_D / 4 },
+    { id: 'holz-braun', name: 'Nussbaum dunkel', cost: 30, x: ROOM_W / 5, y: ROOM_D / 4 },
+    { id: 'holz-sumpfeiche', name: 'Sumpfeiche', cost: 32, x: ROOM_W / 5, y: ROOM_D / 4 },
+    { id: 'holz-graphit', name: 'Graphit', cost: 30, x: ROOM_W / 5, y: ROOM_D / 4 }
+  ];
+
+  var gewaehlt = { holz: 'kiefer', wand: 'creme', boden: 'floor' };
+
+  function setzeHolz(id) {
+    gewaehlt.holz = id;
+    setSurface(woodMat, 'holz-' + id, 2, 2);
+  }
+
+  function setzeWand(id) {
+    gewaehlt.wand = id;
+    setSurface(wallUpMat, 'wand-' + id, 1, 1);
+  }
+
+  function setzeBoden(id) {
+    var b = BODEN_BELAEGE.filter(function (x) { return x.id === id; })[0];
+    if (!b) return;
+    gewaehlt.boden = id;
+    setSurface(floor.material, id, b.x, b.y);
+  }
+
   var bought = {};
   var shopTab = 'plants';
+  var paintGroup = 'wood';
   var plantGroup = 'green';
   var buildGroup = 'racks';
   var decorGroup = 'rugs';
@@ -3402,9 +3482,59 @@
     return row;
   }
 
+  function farbZeile(gruppe, eintrag, aktiv, datei, anwenden) {
+    var gekauft = eintrag.cost === 0 || bought['farbe-' + gruppe + '-' + eintrag.id];
+    return offerRow(
+      'art/' + datei + '.jpg',
+      eintrag.name,
+      aktiv ? 'Zurzeit im Laden' : (gekauft ? 'Gekauft – antippen zum Wechseln'
+                                            : 'Einmalig ' + eintrag.cost + ' Münzen'),
+      aktiv ? 'Aktiv' : (gekauft ? 'Nehmen' : eintrag.cost + ' ●'),
+      !aktiv && (gekauft || coins >= eintrag.cost),
+      function () {
+        if (!gekauft) {
+          if (coins < eintrag.cost) return;
+          setCoins(coins - eintrag.cost);
+          bought['farbe-' + gruppe + '-' + eintrag.id] = true;
+        }
+        anwenden(eintrag.id);
+        renderShop();
+      });
+  }
+
   function renderShop() {
     var list = el.shopList;
     list.textContent = '';
+
+    if (shopTab === 'paint') {
+      var note = document.createElement('p');
+      note.className = 'demo-note';
+      note.textContent = 'Ausführung einmal kaufen, danach beliebig wechseln.';
+      list.appendChild(note);
+      list.appendChild(chipRow(
+        [{ id: 'wood', name: 'Regale & Möbel' },
+         { id: 'wall', name: 'Wände' },
+         { id: 'floor', name: 'Boden' }],
+        paintGroup, function (id) { paintGroup = id; renderShop(); }));
+
+      if (paintGroup === 'wood') {
+        HOLZ_AUSFUEHRUNGEN.forEach(function (e) {
+          list.appendChild(farbZeile('holz', e, gewaehlt.holz === e.id,
+            'holz-' + e.id, setzeHolz));
+        });
+      } else if (paintGroup === 'wall') {
+        WAND_FARBEN.forEach(function (e) {
+          list.appendChild(farbZeile('wand', e, gewaehlt.wand === e.id,
+            'wand-' + e.id, setzeWand));
+        });
+      } else {
+        BODEN_BELAEGE.forEach(function (e) {
+          list.appendChild(farbZeile('boden', e, gewaehlt.boden === e.id,
+            e.id, setzeBoden));
+        });
+      }
+      return;
+    }
 
     if (shopTab === 'plants') {
       var free = openSlots().length;
