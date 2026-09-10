@@ -441,7 +441,7 @@
   <!-- Die Versionsnummer steht sichtbar da, weil Safari die Seite gecacht hat
        und eine alte Fassung als "immer noch kaputt" durchging. Bei jeder
        Aenderung hochzaehlen. -->
-  <div class="mark"><b>Lynn's Plants</b><span>3D PROTOTYP &middot; V26</span></div>
+  <div class="mark"><b>Lynn's Plants</b><span>3D PROTOTYP &middot; V28</span></div>
   <button class="coins" id="coinBtn" type="button"><i></i><b id="coinValue">1000</b><em>+</em></button>
 </header>
 
@@ -2109,16 +2109,58 @@
   // ------------------------------------------------------------- glasshouse
   // The room stays open at the top so the camera always sees the whole shop.
   // String lights hug the back wall instead of crossing the view.
+  // Alle Birnen in einer Instanz-Gruppe statt als einzelne Meshes: ein
+  // Zeichenaufruf statt sechsundzwanzig, und die Farbe laesst sich pro Birne
+  // setzen - genau das, was der Farbwechsel braucht.
   var bulbMat = new THREE.MeshBasicMaterial({ color: '#ffdf9e' });
-  for (var sl = 0; sl < 14; sl++) {
-    var t = sl / 13;
-    var bulb = new THREE.Mesh(new THREE.SphereGeometry(0.055, 8, 6), bulbMat);
-    bulb.position.set(
+  var bulbGeo = new THREE.SphereGeometry(0.055, 8, 6);
+  var bulbSpots = [];
+
+  function addBulbRow(anzahl, punkt) {
+    for (var i = 0; i < anzahl; i++) bulbSpots.push(punkt(i / (anzahl - 1)));
+  }
+
+  addBulbRow(14, function (t) {
+    return new THREE.Vector3(
       -ROOM_W / 2 + 0.7 + t * (ROOM_W - 1.4),
       WALL_H - 0.34 - Math.sin(t * Math.PI) * 0.18,
       -ROOM_D / 2 + 0.16
     );
-    wallBack.add(bulb);
+  });
+
+  var bulbs = null;
+  var bulbBase = new THREE.Color('#ffdf9e');
+  var bulbColour = new THREE.Color();
+  var ledMode = false;
+
+  function buildBulbs() {
+    if (bulbs) scene.remove(bulbs);
+    bulbs = new THREE.InstancedMesh(
+      bulbGeo,
+      new THREE.MeshBasicMaterial(),
+      bulbSpots.length
+    );
+    var m = new THREE.Matrix4();
+    bulbSpots.forEach(function (p, i) {
+      m.makeTranslation(p.x, p.y, p.z);
+      bulbs.setMatrixAt(i, m);
+      bulbs.setColorAt(i, bulbBase);
+    });
+    bulbs.instanceMatrix.needsUpdate = true;
+    if (bulbs.instanceColor) bulbs.instanceColor.needsUpdate = true;
+    bulbs.frustumCulled = false;
+    scene.add(bulbs);
+  }
+
+  function updateBulbs(now) {
+    if (!bulbs || !ledMode || !bulbs.instanceColor) return;
+    // Der Farbton wandert langsam die Kette entlang, damit es nach Lauflicht
+    // aussieht und nicht nach gleichzeitigem Umschalten.
+    for (var i = 0; i < bulbSpots.length; i++) {
+      bulbColour.setHSL(((now / 5200) + i * 0.055) % 1, 0.72, 0.62);
+      bulbs.setColorAt(i, bulbColour);
+    }
+    bulbs.instanceColor.needsUpdate = true;
   }
 
   // Hier stand ein zweites, flaches Fenster: eine beige Flaeche ohne Ausblick,
@@ -2142,6 +2184,8 @@
   BAEUME.forEach(function (b) {
     decorCard(b[0], b[1], b[2], b[3], 0, false, true);
   });
+
+  buildBulbs();
 
   // ---------------------------------------------------------------- persons
   function limb(mat, length, thickness) {
@@ -3250,6 +3294,22 @@
       }
     },
     {
+      id: 'led', name: 'LED-Kette mit Farbwechsel', cost: 44, cat: 'light',
+      note: 'Ruestet alle Lichterketten auf langsam wandernde Farben um.',
+      preview: function () {
+        var group = new THREE.Group();
+        var farben = ['#ff6b6b', '#ffd166', '#8ce99a', '#74c0fc', '#b197fc', '#ffa8d8'];
+        farben.forEach(function (c, i) {
+          var b = new THREE.Mesh(new THREE.SphereGeometry(0.07, 10, 8),
+            new THREE.MeshBasicMaterial({ color: c }));
+          b.position.set(-0.62 + i * 0.25, 0.24 - Math.sin(i / 5 * Math.PI) * 0.06, 0);
+          group.add(b);
+        });
+        return group;
+      },
+      place: function () { ledMode = true; }
+    },
+    {
       id: 'lamp', name: 'Stehlampe', cost: 38, cat: 'light',
       note: 'Warmes Licht in der Leseecke.',
       preview: function () {
@@ -3293,16 +3353,14 @@
         return group;
       },
       place: function () {
-        for (var i = 0; i < 12; i++) {
-          var t = i / 11;
-          var bulb = new THREE.Mesh(new THREE.SphereGeometry(0.055, 8, 6), bulbMat);
-          bulb.position.set(
+        addBulbRow(12, function (t) {
+          return new THREE.Vector3(
             ROOM_W / 2 - 0.16,
             WALL_H - 0.34 - Math.sin(t * Math.PI) * 0.18,
             -ROOM_D / 2 + 0.7 + t * (ROOM_D - 1.4)
           );
-          wallRight.add(bulb);
-        }
+        });
+        buildBulbs();
       }
     }
   ];
@@ -3385,7 +3443,62 @@
   // Szene, und was spaeter gebaut wird, kommt gleich richtig heraus.
   var finishTex = {};
 
+  // Fliesen zeichne ich selbst. Ein allgemeines Bildmodell kann geometrische
+  // Muster nicht sauber: aus "Terrakottafliesen" wurden Bretter, aus einem
+  // Schachbrett ein Chrom-Durcheinander. Auf der Zeichenflaeche stimmen die
+  // Fugen dagegen auf den Pixel, und es kostet keinen Download.
+  function kachelTextur(toene, fuge, felder, streuung) {
+    var c = document.createElement('canvas');
+    c.width = c.height = 512;
+    var g = c.getContext('2d');
+    var schritt = 512 / felder;
+    g.fillStyle = fuge;
+    g.fillRect(0, 0, 512, 512);
+    for (var y = 0; y < felder; y++) {
+      for (var x = 0; x < felder; x++) {
+        var ton = toene[(x + y) % toene.length];
+        g.fillStyle = ton;
+        g.fillRect(x * schritt + 2, y * schritt + 2, schritt - 4, schritt - 4);
+        // Leichte Unruhe je Platte, sonst wirkt der Boden wie Millimeterpapier
+        for (var k = 0; k < streuung; k++) {
+          g.fillStyle = 'rgba(0,0,0,' + (Math.random() * 0.045) + ')';
+          g.fillRect(x * schritt + 3 + Math.random() * (schritt - 8),
+                     y * schritt + 3 + Math.random() * (schritt - 8),
+                     Math.random() * 9 + 2, Math.random() * 9 + 2);
+        }
+        g.fillStyle = 'rgba(255,255,255,.05)';
+        g.fillRect(x * schritt + 2, y * schritt + 2, schritt - 4, 3);
+      }
+    }
+    var t = new THREE.CanvasTexture(c);
+    t.wrapS = t.wrapT = THREE.RepeatWrapping;
+    t.encoding = THREE.sRGBEncoding;
+    t.anisotropy = maxAniso;
+    return t;
+  }
+
+  var MUSTER = {
+    'muster-terrakotta': function () {
+      return kachelTextur(['#b9673c', '#c47245', '#ad5f36'], '#e2d6c2', 4, 26);
+    },
+    'muster-schach': function () {
+      return kachelTextur(['#2c2c2e', '#efe9df'], '#8d8a84', 4, 16);
+    },
+    'muster-zement': function () {
+      return kachelTextur(['#6f7f74', '#7d8c81', '#65756b'], '#d8d2c6', 4, 30);
+    }
+  };
+
   function setSurface(mat, datei, wiederX, wiederY) {
+    if (MUSTER[datei]) {
+      if (!finishTex[datei]) finishTex[datei] = MUSTER[datei]();
+      var muster = finishTex[datei];
+      muster.repeat.set(wiederX, wiederY);
+      mat.map = muster;
+      mat.color.set('#ffffff');
+      mat.needsUpdate = true;
+      return;
+    }
     var fertig = finishTex[datei];
     if (fertig) {
       mat.map = fertig;
@@ -3433,7 +3546,10 @@
     { id: 'holz-birke', name: 'Birke hell', cost: 26, x: ROOM_W / 5, y: ROOM_D / 4 },
     { id: 'holz-braun', name: 'Nussbaum dunkel', cost: 30, x: ROOM_W / 5, y: ROOM_D / 4 },
     { id: 'holz-sumpfeiche', name: 'Sumpfeiche', cost: 32, x: ROOM_W / 5, y: ROOM_D / 4 },
-    { id: 'holz-graphit', name: 'Graphit', cost: 30, x: ROOM_W / 5, y: ROOM_D / 4 }
+    { id: 'holz-graphit', name: 'Graphit', cost: 30, x: ROOM_W / 5, y: ROOM_D / 4 },
+    { id: 'muster-terrakotta', name: 'Terrakotta-Fliesen', cost: 34, x: 3.6, y: 3 },
+    { id: 'muster-schach', name: 'Schachbrett', cost: 36, x: 3.6, y: 3 },
+    { id: 'muster-zement', name: 'Zementfliesen', cost: 34, x: 3.6, y: 3 }
   ];
 
   var gewaehlt = { holz: 'kiefer', wand: 'creme', boden: 'floor' };
@@ -3519,10 +3635,22 @@
     return row;
   }
 
+  // Fuer die Musterboeden gibt es keine Bilddatei, also wird das Vorschaubild
+  // aus derselben Zeichenflaeche gewonnen.
+  var musterVorschau = {};
+
+  function vorschauBild(datei) {
+    if (!MUSTER[datei]) return 'art/' + datei + '.jpg';
+    if (!musterVorschau[datei]) {
+      musterVorschau[datei] = MUSTER[datei]().image.toDataURL('image/png');
+    }
+    return musterVorschau[datei];
+  }
+
   function farbZeile(gruppe, eintrag, aktiv, datei, anwenden) {
     var gekauft = eintrag.cost === 0 || bought['farbe-' + gruppe + '-' + eintrag.id];
     return offerRow(
-      'art/' + datei + '.jpg',
+      vorschauBild(datei),
       eintrag.name,
       aktiv ? 'Zurzeit im Laden' : (gekauft ? 'Gekauft – antippen zum Wechseln'
                                             : 'Einmalig ' + eintrag.cost + ' Münzen'),
@@ -4241,6 +4369,7 @@
 
     updatePlantCards();
     updateDecorCards();
+    updateBulbs(now);
     for (var cc = 0; cc < candleCards.length; cc++) {
       var karte = candleCards[cc];
       if (!karte.parent) continue;
