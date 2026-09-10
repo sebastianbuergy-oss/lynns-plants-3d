@@ -95,8 +95,8 @@
   .coins{
     pointer-events:auto;
     display:flex;align-items:center;gap:7px;
-    height:34px;padding:0 13px;
-    border-radius:17px;
+    height:44px;padding:0 15px;
+    border-radius:22px;
     background:rgba(20,38,24,.82);
     border:1px solid rgba(244,236,218,.18);
     color:var(--cream);
@@ -143,10 +143,15 @@
     left:50%;
     bottom:calc(16px + env(safe-area-inset-bottom));
     transform:translateX(-50%) translateY(14px);
+    /* Vier Pflegeknoepfe plus Name und Wasserstand passen auf einem 375-px-
+       Display nicht in eine Zeile - der Giessen-Knopf wurde auf 41 px
+       zusammengedrueckt. Jetzt darf die Leiste umbrechen. */
     display:flex;
+    flex-wrap:wrap;
+    justify-content:center;
     align-items:center;
-    gap:10px;
-    padding:8px 10px;
+    gap:8px;
+    padding:9px 10px;
     border-radius:16px;
     background:rgba(244,236,218,.95);
     border:1px solid rgba(27,42,29,.14);
@@ -157,6 +162,15 @@
     max-width:calc(100vw - 24px);
   }
   .tray.on{opacity:1;transform:translateX(-50%) translateY(0);pointer-events:auto}
+  /* Auf dem Handy brach die Leiste in zwei Knopfspalten um und wurde 232 px
+     hoch, also ein Viertel des Bildschirms. Name und Wasserstand bekommen je
+     eine eigene Zeile, dann passen die vier Pflegeknoepfe nebeneinander. */
+  @media (max-width:560px){
+    .tray{width:calc(100vw - 24px)}
+    .tray .who{flex:1 0 100%;padding-left:0;text-align:center;align-items:center}
+    .tray .meter{flex:1 0 100%}
+    .tray button{flex:1 1 0;width:auto;min-width:0}
+  }
   .tray .who{display:flex;flex-direction:column;gap:2px;min-width:0;padding-left:4px}
   .tray .who b{
     font-family:var(--display);
@@ -173,7 +187,7 @@
     border:0;
     font:inherit;
     display:flex;flex-direction:column;align-items:center;gap:2px;
-    width:56px;padding:7px 4px;
+    flex:0 0 auto;width:60px;min-height:52px;padding:9px 4px;
     border-radius:11px;
     background:rgba(63,92,58,.12);
     color:var(--ink);
@@ -194,9 +208,9 @@
     top:calc(54px + env(safe-area-inset-top));
     left:calc(14px + env(safe-area-inset-left));
     display:flex;align-items:center;gap:6px;
-    height:34px;padding:0 14px;
+    height:44px;padding:0 16px;
     border:1px solid rgba(244,236,218,.2);
-    border-radius:17px;
+    border-radius:22px;
     background:rgba(20,38,24,.82);
     color:var(--cream);
     font:inherit;font-size:12px;font-weight:700;
@@ -246,7 +260,7 @@
   }
   .place-bar button{
     border:0;font:inherit;flex:0 0 auto;
-    padding:9px 12px;border-radius:11px;
+    min-height:44px;min-width:52px;padding:9px 14px;border-radius:11px;
     background:rgba(63,92,58,.12);color:var(--ink);
     font-size:11px;font-weight:800;cursor:pointer;
   }
@@ -321,7 +335,7 @@
   .pot-choice:disabled{opacity:.4;cursor:default}
   .pot-choice:focus-visible{outline:2px solid var(--moss);outline-offset:2px}
   .sheet-close{
-    width:100%;margin-top:11px;padding:10px;
+    width:100%;margin-top:11px;min-height:46px;padding:12px;
     border:0;border-radius:11px;
     background:rgba(63,92,58,.12);
     font:inherit;font-size:11px;font-weight:800;color:var(--ink);cursor:pointer;
@@ -342,17 +356,20 @@
   .tabs{display:flex;gap:5px;margin:12px 0 10px;overflow-x:auto}
   .tabs button{
     flex:0 0 auto;border:0;font:inherit;
-    padding:7px 12px;border-radius:10px;
+    min-height:44px;padding:7px 14px;border-radius:10px;
     background:rgba(63,92,58,.1);color:var(--ink-soft);
     font-size:11px;font-weight:800;cursor:pointer;
   }
   .tabs button.on{background:var(--moss);color:var(--cream)}
   .tabs button:focus-visible{outline:2px solid var(--moss);outline-offset:2px}
   .shop-list{display:flex;flex-direction:column;gap:7px;max-height:46vh;overflow-y:auto}
-  .chips{display:flex;gap:5px;overflow-x:auto;padding-bottom:3px;flex:0 0 auto}
+  /* Die Kategorien liefen seitlich aus dem Bild: "Grosse Pflanzen", "Haengend"
+     und "Pakete" lagen auf einem 375-px-Display bei x 328 bis 557. Sie
+     brechen jetzt um, statt in einem Scrollstreifen zu verschwinden. */
+  .chips{display:flex;flex-wrap:wrap;gap:6px;padding-bottom:3px;flex:0 0 auto}
   .chips button{
     flex:0 0 auto;border:0;font:inherit;
-    padding:6px 11px;border-radius:9px;
+    min-height:38px;padding:9px 13px;border-radius:10px;
     background:rgba(63,92,58,.1);color:var(--ink-soft);
     font-size:10px;font-weight:800;cursor:pointer;white-space:nowrap;
   }
@@ -422,7 +439,7 @@
   <!-- Die Versionsnummer steht sichtbar da, weil Safari die Seite gecacht hat
        und eine alte Fassung als "immer noch kaputt" durchging. Bei jeder
        Aenderung hochzaehlen. -->
-  <div class="mark"><b>Lynn's Plants</b><span>3D PROTOTYP &middot; V11</span></div>
+  <div class="mark"><b>Lynn's Plants</b><span>3D PROTOTYP &middot; V13</span></div>
   <button class="coins" id="coinBtn" type="button"><i></i><b id="coinValue">1000</b><em>+</em></button>
 </header>
 
