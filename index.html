@@ -536,7 +536,7 @@
        und eine alte Fassung als "immer noch kaputt" durchging. Bei jeder
        Aenderung hochzaehlen. -->
   <div class="mark">
-    <b>Fleur-Blache’s Blumen</b><span>TESTVERSION &middot; V49</span>
+    <b>Fleur-Blache’s Blumen</b><span>TESTVERSION &middot; V50</span>
     <em id="premiumBadge" class="premium-badge" hidden>👑 Premium</em>
   </div>
   <div class="hud-right">
@@ -5624,7 +5624,10 @@
   // aber mit CHF-Preis und ohne Münzabzug - genau wie die Muenzpakete
   // selbst schon vorgemacht haben. Nur was am Ladencomputer einzeln bestellt
   // wird, kostet weiter Münzen.
-  var PREMIUM_PREIS = 'CHF 9.—';
+  // Die neun Pflanzensets zusammen kosten einzeln CHF 24.-; Premium war auf
+  // CHF 9.- statt CHF 15.- angesetzt, das war zu billig - lohnte sich nie,
+  // auch nur ein einzelnes Set zu kaufen, sobald man das Bundle gesehen hat.
+  var PREMIUM_PREIS = 'CHF 15.—';
 
   function kaufePremium() {
     if (premium) return;
