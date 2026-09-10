@@ -439,7 +439,7 @@
   <!-- Die Versionsnummer steht sichtbar da, weil Safari die Seite gecacht hat
        und eine alte Fassung als "immer noch kaputt" durchging. Bei jeder
        Aenderung hochzaehlen. -->
-  <div class="mark"><b>Lynn's Plants</b><span>3D PROTOTYP &middot; V15</span></div>
+  <div class="mark"><b>Lynn's Plants</b><span>3D PROTOTYP &middot; V16</span></div>
   <button class="coins" id="coinBtn" type="button"><i></i><b id="coinValue">1000</b><em>+</em></button>
 </header>
 
@@ -798,27 +798,39 @@
   pavement.receiveShadow = true;
   scene.add(pavement);
 
-  var hedgeMat = new THREE.MeshStandardMaterial({ color: '#4e7a44', roughness: 0.9 });
-  var hedgeGeo = new THREE.BoxGeometry(1.5, 1.5, 1.5);
-  for (var hx = -8; hx <= 8; hx += 1.35) {
-    for (var side = 0; side < 2; side++) {
-      var z = side ? ROOM_D / 2 + 7.4 : -ROOM_D / 2 - 3.4;
-      var bushA = new THREE.Mesh(hedgeGeo, hedgeMat);
-      bushA.position.set(hx + (Math.random() - 0.5) * 0.3, 0.55 + Math.random() * 0.25, z);
-      bushA.rotation.y = Math.random();
-      bushA.castShadow = bushA.receiveShadow = true;
-      scene.add(bushA);
+  // Die Hecke bestand aus 1.5-m-Wuerfeln und war als Reihe von Kisten zu
+  // erkennen - sichtbar bei jeder Drehung nach draussen. Jetzt sind es runde
+  // Buesche in drei Gruentoenen, je Standort zwei bis drei ineinander
+  // geschoben, damit eine durchgehende Hecke mit unruhiger Oberkante entsteht.
+  var hedgeMats = ['#456f3c', '#4e7a44', '#3c6435'].map(function (c) {
+    return new THREE.MeshStandardMaterial({ color: c, roughness: 0.94 });
+  });
+  var hedgeGeo = new THREE.SphereGeometry(0.78, 10, 8);
+
+  function hedgeClump(x, z) {
+    var count = 2 + Math.floor(Math.random() * 2);
+    for (var i = 0; i < count; i++) {
+      var bush = new THREE.Mesh(hedgeGeo, hedgeMats[(i + Math.floor(Math.random() * 3)) % 3]);
+      bush.position.set(
+        x + (Math.random() - 0.5) * 0.75,
+        0.42 + Math.random() * 0.42,
+        z + (Math.random() - 0.5) * 0.75
+      );
+      var s = 0.72 + Math.random() * 0.45;
+      bush.scale.set(s, s * (0.78 + Math.random() * 0.3), s);
+      bush.rotation.set(Math.random(), Math.random(), Math.random());
+      bush.castShadow = bush.receiveShadow = true;
+      scene.add(bush);
     }
   }
-  for (var hz = -ROOM_D / 2 - 3; hz <= ROOM_D / 2 + 7; hz += 1.35) {
-    for (var wall = 0; wall < 2; wall++) {
-      var x = wall ? ROOM_W / 2 + 3.2 : -ROOM_W / 2 - 3.2;
-      var bushB = new THREE.Mesh(hedgeGeo, hedgeMat);
-      bushB.position.set(x, 0.55 + Math.random() * 0.25, hz + (Math.random() - 0.5) * 0.3);
-      bushB.rotation.y = Math.random();
-      bushB.castShadow = bushB.receiveShadow = true;
-      scene.add(bushB);
-    }
+
+  for (var hx = -8; hx <= 8; hx += 1.15) {
+    hedgeClump(hx, -ROOM_D / 2 - 3.4);
+    hedgeClump(hx, ROOM_D / 2 + 7.4);
+  }
+  for (var hz = -ROOM_D / 2 - 3; hz <= ROOM_D / 2 + 7; hz += 1.15) {
+    hedgeClump(-ROOM_W / 2 - 3.2, hz);
+    hedgeClump(ROOM_W / 2 + 3.2, hz);
   }
 
   // A faint darkening at the edges stands in for the shading a real corner
@@ -1169,7 +1181,10 @@
   }
 
   // ----------------------------------------------------------------- pieces
-  var woodMat = new THREE.MeshStandardMaterial({ color: '#b47c42', roughness: 0.72 });
+  // Gemalte Kiefernbretter, oertlich erzeugt und aus Lynns eigenem Bodenbild
+  // abgeleitet, damit die Handschrift stimmt. Faellt die Datei aus, bleibt die
+  // Holzfarbe stehen und nichts sieht kaputt aus.
+  var woodMat = paintedMaterial('gen-pine', 2, 2, '#b47c42', { roughness: 0.72 });
   var darkMat = new THREE.MeshStandardMaterial({ color: '#2b2723', roughness: 0.6 });
   var frameWood = new THREE.MeshStandardMaterial({ color: '#7a5533', roughness: 0.8 });
   var potMats = [
@@ -1775,9 +1790,7 @@
 
   var rug = new THREE.Mesh(
     new THREE.CircleGeometry(1.35, 32),
-    new THREE.MeshStandardMaterial({
-      map: rugTexture('#3d5434', '#4d6742', true), roughness: 1
-    })
+    paintedMaterial('gen-rug', 1.6, 1.6, '#4a6440', { roughness: 1 })
   );
   rug.rotation.x = -Math.PI / 2;
   // Nicht in die Lichtbahn legen (x -1 bis 1.6, z -4.4 bis -0.2).
@@ -1926,7 +1939,7 @@
   var frameMat = new THREE.MeshStandardMaterial({ color: '#8a5c33', roughness: 0.7 });
 
   // crates and a watering can, the clutter that makes a room look worked in
-  var crateMat = new THREE.MeshStandardMaterial({ color: '#8f6a42', roughness: 0.9 });
+  var crateMat = paintedMaterial('gen-pine', 1.4, 1.4, '#8f6a42', { roughness: 0.9 });
   [[-4.3, 1.1, 0.5], [-4.0, 1.7, 0.42], [4.4, 0.4, 0.46]].forEach(function (c) {
     var crate = new THREE.Mesh(new THREE.BoxGeometry(c[2], c[2] * 0.8, c[2]), crateMat);
     crate.position.set(c[0], c[2] * 0.4, c[1]);
@@ -2898,11 +2911,9 @@
   }
 
   function runnerRug() {
-    var tex = rugTexture('#3a5031', '#4a6440', false);
-    tex.repeat.set(1, 2.4);   // laenglich, damit das Flechtmuster nicht zerrt
     return new THREE.Mesh(
       new THREE.PlaneGeometry(1.3, 3.4),
-      new THREE.MeshStandardMaterial({ map: tex, roughness: 1 })
+      paintedMaterial('gen-rug', 1, 2.6, '#4a6440', { roughness: 1 })
     );
   }
 
@@ -2913,7 +2924,7 @@
       preview: function () {
         var disc = new THREE.Mesh(
           new THREE.CircleGeometry(1.35, 32),
-          new THREE.MeshStandardMaterial({ map: rugTexture('#3d5434', '#4d6742', true), roughness: 1 })
+          paintedMaterial('gen-rug', 1.6, 1.6, '#4a6440', { roughness: 1 })
         );
         disc.rotation.x = -Math.PI / 2;
         return disc;
