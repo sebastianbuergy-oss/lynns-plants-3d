@@ -441,7 +441,7 @@
   <!-- Die Versionsnummer steht sichtbar da, weil Safari die Seite gecacht hat
        und eine alte Fassung als "immer noch kaputt" durchging. Bei jeder
        Aenderung hochzaehlen. -->
-  <div class="mark"><b>Lynn's Plants</b><span>3D PROTOTYP &middot; V32</span></div>
+  <div class="mark"><b>Lynn's Plants</b><span>3D PROTOTYP &middot; V33</span></div>
   <button class="coins" id="coinBtn" type="button"><i></i><b id="coinValue">1000</b><em>+</em></button>
 </header>
 
@@ -3796,6 +3796,58 @@
     setSurface(floor.material, id, b.x, b.y);
   }
 
+  // Nicht mehr alle Arten von Anfang an. Das Grundsortiment liegt im Laden,
+  // alles Weitere kommt als Set - im fertigen Spiel ueber den Kaufdialog von
+  // Apple, hier im Prototyp gegen Muenzen, damit sich der Ablauf spielen laesst.
+  var PLANT_SETS = [
+    {
+      id: 'basis', name: 'Grundsortiment', cost: 0,
+      note: 'Liegt von Anfang an im Laden.',
+      arten: ['Calathea', 'Monstera', 'Zimmerlinde', 'Schwertfarn',
+              'Goldkugelkaktus', 'Echeveria']
+    },
+    {
+      id: 'bloom', name: 'Blütenzauber', cost: 120,
+      note: 'Fünf blühende Arten, vom Usambaraveilchen bis zur Orchidee.',
+      arten: ['Friedenslilie', 'Usambaraveilchen', 'Orchidee', 'Anthurie', 'Begonie']
+    },
+    {
+      id: 'desert', name: 'Wüstenkiste', cost: 95,
+      note: 'Vier Arten, die kaum Wasser brauchen.',
+      arten: ['Säulenkaktus', 'Haworthia', 'Aloe', 'Bogenhanf']
+    },
+    {
+      id: 'solo', name: 'Grosse Solitäre', cost: 165,
+      note: 'Fünf Arten für den grossen Auftritt.',
+      arten: ['Geigenfeige', 'Zimmerpalme', 'Drachenbaum', 'Gummibaum', 'Pfeilblatt']
+    },
+    {
+      id: 'hang', name: 'Hängende Gärten', cost: 110,
+      note: 'Vier rankende Arten für Ampeln und Kanten.',
+      arten: ['Efeutute', 'Perlenkette', 'Efeu', 'Grünlilie']
+    }
+  ];
+
+  var setOf = {};
+  PLANT_SETS.forEach(function (satz) {
+    satz.arten.forEach(function (art) { setOf[art] = satz.id; });
+  });
+
+  var unlockedSets = { basis: true };
+
+  function artFrei(species) {
+    var id = setOf[species.name];
+    return !id || !!unlockedSets[id];
+  }
+
+  // Muenzpakete. Im fertigen Spiel echte Kaeufe, hier eine Schaltflaeche - der
+  // Anschluss an StoreKit kommt beim iOS-Build dazu.
+  var COIN_PACKS = [
+    { id: 'p1', name: 'Handvoll Münzen', coins: 250, preis: 'CHF 1.—' },
+    { id: 'p2', name: 'Beutel Münzen', coins: 800, preis: 'CHF 3.—' },
+    { id: 'p3', name: 'Kiste Münzen', coins: 2200, preis: 'CHF 7.—' }
+  ];
+
   var bought = {};
   var shopTab = 'plants';
   var paintGroup = 'wood';
@@ -3892,6 +3944,46 @@
       });
   }
 
+  // Diese Funktion wurde an zwei Stellen aufgerufen, aber nie geschrieben:
+  // ein Tipp auf die Muenzen oben rechts oeffnete ein leeres Blatt und warf
+  // einen Fehler. Jetzt stehen hier die Muenzpakete und die Pflanzensets.
+  function renderStore() {
+    var list = el.storeList;
+    list.textContent = '';
+
+    var kopf = document.createElement('p');
+    kopf.className = 'demo-note';
+    kopf.textContent = 'Im Prototyp ohne echte Zahlung: antippen schaltet frei.';
+    list.appendChild(kopf);
+
+    COIN_PACKS.forEach(function (pack) {
+      list.appendChild(offerRow('🪙', pack.name,
+        pack.coins + ' Münzen · ' + pack.preis, 'Kaufen', true,
+        function () {
+          setCoins(coins + pack.coins);
+          say(pack.name + ' gutgeschrieben: ' + pack.coins + ' Münzen.');
+        }));
+    });
+
+    PLANT_SETS.forEach(function (satz) {
+      if (satz.cost === 0) return;
+      var frei = !!unlockedSets[satz.id];
+      list.appendChild(offerRow(
+        'art/plants/' + plantSlug(satz.arten[0]) + '-terracotta.webp',
+        satz.name,
+        frei ? satz.arten.length + ' Arten freigeschaltet' : satz.note,
+        frei ? 'Freigeschaltet' : satz.cost + ' ●',
+        !frei && coins >= satz.cost,
+        function () {
+          setCoins(coins - satz.cost);
+          unlockedSets[satz.id] = true;
+          say(satz.name + ' freigeschaltet – ' + satz.arten.length
+            + ' neue Arten im Ladencomputer.');
+          renderStore();
+        }));
+    });
+  }
+
   function renderShop() {
     var list = el.shopList;
     list.textContent = '';
@@ -3901,6 +3993,18 @@
       note.className = 'demo-note';
       note.textContent = 'Ausführung einmal kaufen, danach beliebig wechseln.';
       list.appendChild(note);
+      var gesperrt = 0;
+      PLANT_GROUPS.forEach(function (g) {
+        g.species.forEach(function (sp) { if (!artFrei(sp)) gesperrt++; });
+      });
+      if (gesperrt) {
+        var sperr = document.createElement('p');
+        sperr.className = 'demo-note';
+        sperr.textContent = gesperrt + ' weitere Arten stecken in Pflanzensets – '
+          + 'oben rechts auf die Münzen tippen.';
+        list.appendChild(sperr);
+      }
+
       list.appendChild(chipRow(
         [{ id: 'wood', name: 'Regale & Möbel' },
          { id: 'wall', name: 'Wände' },
@@ -3965,7 +4069,7 @@
 
       var chosen = PLANT_GROUPS[0];
       PLANT_GROUPS.forEach(function (group) { if (group.id === plantGroup) chosen = group; });
-      chosen.species.forEach(function (species) {
+      chosen.species.filter(artFrei).forEach(function (species) {
         var cost = Math.round(species.price * 0.55);
         list.appendChild(offerRow(
           'art/plants/' + plantSlug(species.name) + '-terracotta.webp',
