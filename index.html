@@ -474,7 +474,7 @@
        und eine alte Fassung als "immer noch kaputt" durchging. Bei jeder
        Aenderung hochzaehlen. -->
   <div class="mark">
-    <b>Fleur-Blache’s Blumen</b><span>TESTVERSION &middot; V46</span>
+    <b>Fleur-Blache’s Blumen</b><span>TESTVERSION &middot; V47</span>
     <em id="premiumBadge" class="premium-badge" hidden>👑 Premium</em>
   </div>
   <div class="hud-right">
@@ -1857,7 +1857,10 @@
         { name: 'Gummibaum', leaf: '#2f5d3a', style: 'bush', price: 62 },
         { name: 'Zimmerlinde', leaf: '#5c9a55', style: 'bush', price: 40 },
         { name: 'Schwertfarn', leaf: '#4e8f57', style: 'fern', price: 38 },
-        { name: 'Pfeilblatt', leaf: '#3d7d47', style: 'bush', price: 52 }
+        { name: 'Pfeilblatt', leaf: '#3d7d47', style: 'bush', price: 52 },
+        { name: 'Philodendron', leaf: '#2f6b3d', style: 'bush', price: 48 },
+        { name: 'Kroton', leaf: '#c17a35', style: 'bush', price: 42 },
+        { name: 'Aralie', leaf: '#2c5c34', style: 'bush', price: 50 }
       ]
     },
     {
@@ -1866,7 +1869,11 @@
         { name: 'Usambaraveilchen', leaf: '#7a5f9a', style: 'flower', price: 28 },
         { name: 'Orchidee', leaf: '#8fb98a', style: 'flower', price: 74 },
         { name: 'Anthurie', leaf: '#3f7a45', style: 'flower', price: 66 },
-        { name: 'Begonie', leaf: '#6e9a4e', style: 'flower', price: 32 }
+        { name: 'Begonie', leaf: '#6e9a4e', style: 'flower', price: 32 },
+        { name: 'Gerbera', leaf: '#e8792e', style: 'flower', price: 34 },
+        { name: 'Azalee', leaf: '#d9789a', style: 'flower', price: 44 },
+        { name: 'Hortensie', leaf: '#7a9fd1', style: 'flower', price: 52 },
+        { name: 'Alpenveilchen', leaf: '#c96a92', style: 'flower', price: 30 }
       ]
     },
     {
@@ -1875,7 +1882,11 @@
         { name: 'Säulenkaktus', leaf: '#4f8352', style: 'column', price: 44 },
         { name: 'Echeveria', leaf: '#7fa87d', style: 'succulent', price: 26 },
         { name: 'Haworthia', leaf: '#6d9a6a', style: 'succulent', price: 22 },
-        { name: 'Aloe', leaf: '#6f9a63', style: 'blades', price: 34 }
+        { name: 'Aloe', leaf: '#6f9a63', style: 'blades', price: 34 },
+        { name: 'Feigenkaktus', leaf: '#5c8f5a', style: 'cactus', price: 36 },
+        { name: 'Weihnachtskaktus', leaf: '#5c9467', style: 'trailing', price: 32 },
+        { name: 'Kalanchoe', leaf: '#6a9a5e', style: 'succulent', price: 26 },
+        { name: 'Geldbaum', leaf: '#5a8f5f', style: 'succulent', price: 38 }
       ]
     },
     {
@@ -1883,7 +1894,10 @@
         { name: 'Bogenhanf', leaf: '#6d9153', style: 'blades', price: 34 },
         { name: 'Geigenfeige', leaf: '#2c6338', style: 'bush', price: 88 },
         { name: 'Zimmerpalme', leaf: '#3f7d4a', style: 'palm', price: 78 },
-        { name: 'Drachenbaum', leaf: '#57944f', style: 'palm', price: 64 }
+        { name: 'Drachenbaum', leaf: '#57944f', style: 'palm', price: 64 },
+        { name: 'Yuccapalme', leaf: '#4a7a4f', style: 'blades', price: 68 },
+        { name: 'Bananenpflanze', leaf: '#3f7d4a', style: 'palm', price: 82 },
+        { name: 'Ficus Benjamini', leaf: '#2f6b3d', style: 'bush', price: 58 }
       ]
     },
     {
@@ -1891,7 +1905,10 @@
         { name: 'Efeutute', leaf: '#61a14b', style: 'trailing', price: 35 },
         { name: 'Perlenkette', leaf: '#7fae76', style: 'trailing', price: 30 },
         { name: 'Efeu', leaf: '#4a8a46', style: 'trailing', price: 27 },
-        { name: 'Grünlilie', leaf: '#6bab5c', style: 'trailing', price: 24 }
+        { name: 'Grünlilie', leaf: '#6bab5c', style: 'trailing', price: 24 },
+        { name: 'Hängepetunie', leaf: '#9a5fa0', style: 'trailing', price: 26 },
+        { name: 'Fuchsie', leaf: '#a04f6a', style: 'trailing', price: 34 },
+        { name: 'Kletterfeige', leaf: '#4a8a46', style: 'trailing', price: 22 }
       ]
     }
   ];
@@ -4724,6 +4741,79 @@
     );
   }
 
+  // ------------------------------------------------------------ Wandtattoos
+  // Aufgemalt statt aus einer Bilddatei geladen: ein einfarbiger botanischer
+  // Umriss, wie ein echter Wandaufkleber. Erspart eine Generierung fuer etwas,
+  // das ohnehin schlicht und einfarbig sein soll.
+  function wandtattooTextur(farbe, zeichnen) {
+    var c = document.createElement('canvas');
+    c.width = c.height = 512;
+    var g = c.getContext('2d');
+    g.strokeStyle = farbe;
+    g.fillStyle = farbe;
+    g.lineWidth = 7;
+    g.lineCap = 'round';
+    g.lineJoin = 'round';
+    zeichnen(g, c.width, c.height);
+    var t = new THREE.CanvasTexture(c);
+    t.encoding = THREE.sRGBEncoding;
+    return t;
+  }
+
+  function wandtattoo(textur, x, y, z, rotY, hoehe) {
+    var mesh = new THREE.Mesh(
+      new THREE.PlaneGeometry(hoehe, hoehe),
+      new THREE.MeshBasicMaterial({ map: textur, transparent: true, side: THREE.DoubleSide })
+    );
+    mesh.position.set(x, y, z);
+    mesh.rotation.y = rotY;
+    mesh.renderOrder = 1;
+    scene.add(mesh);
+    return mesh;
+  }
+
+  // Ein Zweig mit sieben Blattpaaren, symmetrisch um einen Stamm - robust
+  // genug, um bei jeder Farbe und Drehung noch als Pflanze zu lesen.
+  function zeichneZweig(g, w, h) {
+    var stammX = w * 0.5;
+    g.beginPath();
+    g.moveTo(stammX, h * 0.97);
+    g.lineTo(stammX, h * 0.06);
+    g.stroke();
+    var n = 7;
+    for (var i = 0; i < n; i++) {
+      var t = (i + 1) / (n + 1);
+      var y = h * 0.95 - t * h * 0.87;
+      var len = w * 0.34 * (1 - t * 0.35);
+      [-1, 1].forEach(function (side) {
+        g.beginPath();
+        g.moveTo(stammX, y);
+        g.quadraticCurveTo(stammX + side * len * 0.6, y - h * 0.03, stammX + side * len, y - h * 0.09);
+        g.quadraticCurveTo(stammX + side * len * 0.5, y + h * 0.035, stammX, y + h * 0.02);
+        g.closePath();
+        g.fill();
+      });
+    }
+  }
+
+  // Kleine Blaetter im Kreis, jedes radial ausgerichtet - ein Kranz.
+  function zeichneKranz(g, w, h) {
+    var cx = w * 0.5, cy = h * 0.5, r = w * 0.32;
+    var n = 16;
+    for (var i = 0; i < n; i++) {
+      var a = i / n * Math.PI * 2;
+      g.save();
+      g.translate(cx + Math.cos(a) * r, cy + Math.sin(a) * r);
+      g.rotate(a + Math.PI / 2);
+      g.beginPath();
+      g.moveTo(0, 0);
+      g.quadraticCurveTo(w * 0.045, -h * 0.02, w * 0.09, 0);
+      g.quadraticCurveTo(w * 0.045, h * 0.02, 0, 0);
+      g.fill();
+      g.restore();
+    }
+  }
+
   var DECOR = [
     {
       id: 'rug', name: 'Runder Teppich', cost: 18, cat: 'rugs',
@@ -4949,6 +5039,50 @@
       place: function () {
         wallCard('wimpel', -2.6, 2.62, -ROOM_D / 2 + 0.09, 0, 0.62);
         wallCard('wimpel', 2.6, 2.62, -ROOM_D / 2 + 0.09, 0, 0.62);
+      }
+    },
+    {
+      id: 'tattoo1', name: 'Wandtattoo Efeuranke', cost: 18, cat: 'wall',
+      note: 'Ein aufgemalter Zweig, wie ein echter Wandaufkleber.',
+      preview: function () {
+        var g5 = new THREE.Group();
+        var karte = new THREE.Mesh(new THREE.PlaneGeometry(0.6, 0.6),
+          new THREE.MeshBasicMaterial({ map: wandtattooTextur('#5c7d54', zeichneZweig), transparent: true }));
+        g5.add(karte);
+        return g5;
+      },
+      place: function () {
+        wandtattoo(wandtattooTextur('#5c7d54', zeichneZweig), -4.7, 1.85, -ROOM_D / 2 + 0.06, 0, 1.55);
+      }
+    },
+    {
+      id: 'tattoo2', name: 'Wandtattoo Blätterkranz', cost: 20, cat: 'wall',
+      note: 'Ein aufgemalter Kranz aus kleinen Blättern.',
+      preview: function () {
+        var g6 = new THREE.Group();
+        var karte = new THREE.Mesh(new THREE.PlaneGeometry(0.6, 0.6),
+          new THREE.MeshBasicMaterial({ map: wandtattooTextur('#3f6b3a', zeichneKranz), transparent: true }));
+        g6.add(karte);
+        return g6;
+      },
+      place: function () {
+        wandtattoo(wandtattooTextur('#3f6b3a', zeichneKranz), 2.1, 2.05, -ROOM_D / 2 + 0.06, 0, 1.0);
+      }
+    },
+    {
+      id: 'tattoo3', name: 'Wandtattoo Goldener Zweig', cost: 20, cat: 'wall',
+      note: 'Ein aufgemalter Zweig in Gold, quer über die Wand.',
+      preview: function () {
+        var g7 = new THREE.Group();
+        var karte = new THREE.Mesh(new THREE.PlaneGeometry(0.6, 0.6),
+          new THREE.MeshBasicMaterial({ map: wandtattooTextur('#c99a3e', zeichneZweig), transparent: true }));
+        karte.rotation.z = Math.PI / 2;
+        g7.add(karte);
+        return g7;
+      },
+      place: function () {
+        var t = wandtattoo(wandtattooTextur('#c99a3e', zeichneZweig), -ROOM_W / 2 + 0.06, 2.0, -0.8, Math.PI / 2, 1.35);
+        t.rotation.z = Math.PI / 2;
       }
     },
     {
@@ -5187,7 +5321,9 @@
     { id: 'rot', name: 'Rot', cost: 26 },
     { id: 'graphit', name: 'Graphit', cost: 26 },
     { id: 'salbei', name: 'Salbei', cost: 28 },
-    { id: 'taubenblau', name: 'Taubenblau', cost: 28 }
+    { id: 'taubenblau', name: 'Taubenblau', cost: 28 },
+    { id: 'honig', name: 'Honig', cost: 30 },
+    { id: 'espresso', name: 'Espresso', cost: 30 }
   ];
 
   var WAND_FARBEN = [
@@ -5196,7 +5332,11 @@
     { id: 'terrakotta', name: 'Terrakotta', cost: 20 },
     { id: 'taubenblau', name: 'Taubenblau', cost: 20 },
     { id: 'warmgrau', name: 'Warmgrau', cost: 18 },
-    { id: 'altrosa', name: 'Altrosa', cost: 22 }
+    { id: 'altrosa', name: 'Altrosa', cost: 22 },
+    { id: 'mint', name: 'Mint', cost: 22 },
+    { id: 'senfgelb', name: 'Senfgelb', cost: 22 },
+    { id: 'nachtblau', name: 'Nachtblau', cost: 24 },
+    { id: 'lavendel', name: 'Lavendel', cost: 22 }
   ];
 
   var BODEN_BELAEGE = [
@@ -5205,6 +5345,9 @@
     { id: 'holz-braun', name: 'Nussbaum dunkel', cost: 30, x: ROOM_W / 5, y: ROOM_D / 4 },
     { id: 'holz-sumpfeiche', name: 'Sumpfeiche', cost: 32, x: ROOM_W / 5, y: ROOM_D / 4 },
     { id: 'holz-graphit', name: 'Graphit', cost: 30, x: ROOM_W / 5, y: ROOM_D / 4 },
+    { id: 'holz-salbei', name: 'Salbei', cost: 32, x: ROOM_W / 5, y: ROOM_D / 4 },
+    { id: 'holz-honig', name: 'Honig', cost: 32, x: ROOM_W / 5, y: ROOM_D / 4 },
+    { id: 'holz-espresso', name: 'Espresso', cost: 34, x: ROOM_W / 5, y: ROOM_D / 4 },
     { id: 'muster-terrakotta', name: 'Terrakotta-Fliesen', cost: 34, x: 3.6, y: 3 },
     { id: 'muster-schach', name: 'Schachbrett', cost: 36, x: 3.6, y: 3 },
     { id: 'muster-zement', name: 'Zementfliesen', cost: 34, x: 3.6, y: 3 }
@@ -5262,6 +5405,31 @@
       id: 'hang', name: 'Hängende Gärten', preis: 'CHF 2.—',
       note: 'Drei weitere rankende Arten für Ampeln und Kanten.',
       arten: ['Efeutute', 'Perlenkette', 'Efeu']
+    },
+    {
+      id: 'green2', name: 'Grüne Vielfalt', preis: 'CHF 2.—',
+      note: 'Philodendron, Kroton und Aralie – drei weitere Blattpflanzen.',
+      arten: ['Philodendron', 'Kroton', 'Aralie']
+    },
+    {
+      id: 'bloom2', name: 'Blütenpracht', preis: 'CHF 3.—',
+      note: 'Gerbera, Azalee, Hortensie und Alpenveilchen – vier weitere blühende Arten.',
+      arten: ['Gerbera', 'Azalee', 'Hortensie', 'Alpenveilchen']
+    },
+    {
+      id: 'desert2', name: 'Sukkulenten-Sammlung', preis: 'CHF 3.—',
+      note: 'Feigenkaktus, Weihnachtskaktus, Kalanchoe und Geldbaum – vier weitere pflegeleichte Arten.',
+      arten: ['Feigenkaktus', 'Weihnachtskaktus', 'Kalanchoe', 'Geldbaum']
+    },
+    {
+      id: 'solo2', name: 'Grosse Auswahl', preis: 'CHF 3.—',
+      note: 'Yuccapalme, Bananenpflanze und Ficus Benjamini – drei weitere Blickfänger.',
+      arten: ['Yuccapalme', 'Bananenpflanze', 'Ficus Benjamini']
+    },
+    {
+      id: 'hang2', name: 'Rankende Vielfalt', preis: 'CHF 2.—',
+      note: 'Hängepetunie, Fuchsie und Kletterfeige – drei weitere rankende Arten.',
+      arten: ['Hängepetunie', 'Fuchsie', 'Kletterfeige']
     }
   ];
 
