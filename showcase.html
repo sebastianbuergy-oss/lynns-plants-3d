@@ -441,7 +441,7 @@
   <!-- Die Versionsnummer steht sichtbar da, weil Safari die Seite gecacht hat
        und eine alte Fassung als "immer noch kaputt" durchging. Bei jeder
        Aenderung hochzaehlen. -->
-  <div class="mark"><b>Lynn's Plants</b><span>3D PROTOTYP &middot; V24</span></div>
+  <div class="mark"><b>Lynn's Plants</b><span>3D PROTOTYP &middot; V26</span></div>
   <button class="coins" id="coinBtn" type="button"><i></i><b id="coinValue">1000</b><em>+</em></button>
 </header>
 
@@ -786,6 +786,17 @@
   lightShaft.position.set(0.3, 0.02, -ROOM_D / 2 + 2.2);
   scene.add(lightShaft);
 
+  // Baeume hinter der Hecke. Gemalte Tafeln, die zur Kamera schauen - genug
+  // Tiefe fuers Auge, ohne dass eine Krone aus tausend Blaettern gebaut wird.
+  var BAEUME = [
+    ['baum1', -12.5, -9.5, 5.6], ['baum2', -8.5, -11.5, 4.8],
+    ['baum1', -3.0, -12.5, 6.2], ['baum2', 4.5, -12.0, 5.0],
+    ['baum1', 10.5, -10.0, 5.8], ['baum2', 13.5, -4.5, 4.6],
+    ['baum1', 14.0, 3.5, 6.0], ['baum2', 12.5, 10.5, 4.8],
+    ['baum1', -13.5, -1.5, 5.4], ['baum2', -13.0, 6.5, 4.6],
+    ['baum1', -9.5, 13.5, 5.8], ['baum2', 6.5, 14.0, 5.2]
+  ];
+
   var wallProbe = new THREE.Vector3();
   function updateWalls() {
     for (var i = 0; i < walls.length; i++) {
@@ -798,9 +809,11 @@
   // pavement outside the open sides, so the box reads as a shop, not a stage
   // Turning the camera past a wall used to reveal a huge pale plane. The
   // ground outside is darker now and a hedge closes the view off.
+  // Draussen lag eine einfarbige helle Flaeche. Jetzt gemalte Sommerwiese,
+  // gross genug, dass beim Herausdrehen nirgends eine Kante auftaucht.
   var pavement = new THREE.Mesh(
-    new THREE.PlaneGeometry(26, 26),
-    new THREE.MeshStandardMaterial({ color: '#9aa87f', roughness: 1 })
+    new THREE.PlaneGeometry(52, 52),
+    paintedMaterial('boden-wiese', 13, 13, '#6d8a52', { roughness: 1 })
   );
   pavement.rotation.x = -Math.PI / 2;
   pavement.position.y = -0.06;
@@ -815,6 +828,15 @@
   // Drittel der ganzen Last, nur fuer Buesche, die sich nie bewegen. Als eine
   // Instanz-Gruppe ist es genau einer, bei gleichem Aussehen: Lage, Groesse,
   // Drehung und Farbton stecken pro Busch in der Matrix.
+  // Ein Weg zur Tuer. Ohne ihn steht der Laden mitten in der Wiese, als waere
+  // er dort abgestellt worden.
+  var pathMat = paintedMaterial('boden-weg', 1.6, 5, '#8d9a86', { roughness: 1 });
+  var path = new THREE.Mesh(new THREE.PlaneGeometry(2.6, 9), pathMat);
+  path.rotation.x = -Math.PI / 2;
+  path.position.set(0, -0.04, ROOM_D / 2 + 4.6);
+  path.receiveShadow = true;
+  scene.add(path);
+
   var hedgeGeo = new THREE.SphereGeometry(0.78, 10, 8);
   var hedgeTones = ['#456f3c', '#4e7a44', '#3c6435'].map(function (c) {
     return new THREE.Color(c);
@@ -1929,7 +1951,7 @@
   // leer statt dass eine halbe Figur stehenbleibt.
   var decorCards = [];
 
-  function decorCard(bild, x, z, hoehe, unten, schnur) {
+  function decorCard(bild, x, z, hoehe, unten, schnur, weicht) {
     texLoader.load(ART + 'decor/' + bild + '.webp', function (t) {
       t.encoding = THREE.sRGBEncoding;
       t.minFilter = THREE.LinearFilter;
@@ -1943,6 +1965,7 @@
       );
       karte.position.set(x, unten + hoehe / 2, z);
       karte.renderOrder = 1;
+      karte.userData.weicht = !!weicht;
       scene.add(karte);
       decorCards.push(karte);
       if (schnur) {
@@ -1982,11 +2005,21 @@
     });
   }
 
+  var kartenAbstand = new THREE.Vector3();
+
   function updateDecorCards() {
+    // Wie weit ist der Laden weg? Alles, was naeher steht, verdeckt ihn.
+    var bisZiel = camera.position.distanceTo(orbit.target);
     for (var i = 0; i < decorCards.length; i++) {
       var k = decorCards[i];
       k.rotation.y = Math.atan2(camera.position.x - k.position.x,
                                 camera.position.z - k.position.z);
+      if (k.userData.weicht) {
+        kartenAbstand.copy(k.position).sub(camera.position);
+        // Ein Baum vor der Nase verdeckt den halben Laden - also weg damit,
+        // sobald er naeher steht als der Laden selbst.
+        k.visible = kartenAbstand.length() > bisZiel - 2.5;
+      }
     }
   }
 
@@ -2105,6 +2138,10 @@
   });
 
   decorCard('giesskanne', -2.3, 1.6, 0.3, 0, false);
+
+  BAEUME.forEach(function (b) {
+    decorCard(b[0], b[1], b[2], b[3], 0, false, true);
+  });
 
   // ---------------------------------------------------------------- persons
   function limb(mat, length, thickness) {
