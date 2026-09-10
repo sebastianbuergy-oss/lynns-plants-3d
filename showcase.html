@@ -439,7 +439,7 @@
   <!-- Die Versionsnummer steht sichtbar da, weil Safari die Seite gecacht hat
        und eine alte Fassung als "immer noch kaputt" durchging. Bei jeder
        Aenderung hochzaehlen. -->
-  <div class="mark"><b>Lynn's Plants</b><span>3D PROTOTYP &middot; V16</span></div>
+  <div class="mark"><b>Lynn's Plants</b><span>3D PROTOTYP &middot; V17</span></div>
   <button class="coins" id="coinBtn" type="button"><i></i><b id="coinValue">1000</b><em>+</em></button>
 </header>
 
@@ -3208,14 +3208,27 @@
     return chips;
   }
 
+  // Umlaute zu Dateinamen: die gemalten Pflanzen liegen unter art/plants.
+  function plantSlug(name) {
+    return name.toLowerCase()
+      .replace(/ä/g, 'ae').replace(/ö/g, 'oe').replace(/ü/g, 'ue')
+      .replace(/ß/g, 'ss').replace(/[^a-z0-9]/g, '');
+  }
+
   function offerRow(icon, title, note, label, enabled, onBuy, demo) {
     var row = document.createElement('div');
     row.className = demo ? 'offer demo' : 'offer';
     var mark;
-    if (typeof icon === 'string' && icon.slice(0, 5) === 'data:') {
+    if (typeof icon === 'string' && (icon.slice(0, 5) === 'data:' || icon.slice(0, 4) === 'art/')) {
       mark = document.createElement('img');
       mark.src = icon;
       mark.alt = '';
+      // Fehlt eine gemalte Datei, bleibt kein leerer Rahmen stehen.
+      mark.addEventListener('error', function () {
+        var ersatz = document.createElement('i');
+        ersatz.textContent = '🪴';
+        if (mark.parentNode) mark.parentNode.replaceChild(ersatz, mark);
+      });
     } else {
       mark = document.createElement('i');
       mark.textContent = icon;
@@ -3284,9 +3297,7 @@
       chosen.species.forEach(function (species) {
         var cost = Math.round(species.price * 0.55);
         list.appendChild(offerRow(
-          photo('plant-' + species.name,
-            function () { return buildPlant(species, 1); },
-            !!modelReady[modelForSpecies(species)]),
+          'art/plants/' + plantSlug(species.name) + '.png',
           species.name,
           'Einkauf ' + cost + ' · Verkauf ab ' + species.price + ' Münzen',
           cost + ' ●', coins >= cost && free > 0,
