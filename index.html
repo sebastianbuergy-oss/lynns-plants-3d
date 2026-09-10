@@ -536,7 +536,7 @@
        und eine alte Fassung als "immer noch kaputt" durchging. Bei jeder
        Aenderung hochzaehlen. -->
   <div class="mark">
-    <b>Fleur-Blache’s Blumen</b><span>TESTVERSION &middot; V51</span>
+    <b>Fleur-Blache’s Blumen</b><span>TESTVERSION &middot; V52</span>
     <em id="premiumBadge" class="premium-badge" hidden>👑 Premium</em>
   </div>
   <div class="hud-right">
@@ -2538,7 +2538,9 @@
   // Nicht in die Lichtbahn legen (x -1 bis 1.6, z -4.4 bis -0.2).
   rug.position.set(1.5, 0.012, 1.3);
   rug.receiveShadow = true;
-  rug.visible = false;
+  // Kein Deko-Kauf mehr dafuer - der Teppich liegt von Anfang an da, wie
+  // Boden und Waende. Seine Farbe waehlt man unter Einrichten -> Teppiche.
+  rug.visible = true;
   scene.add(rug);
 
   // ------------------------------------------------------------------ decor
@@ -4918,19 +4920,6 @@
 
   var DECOR = [
     {
-      id: 'rug', name: 'Runder Teppich', cost: 18, cat: 'rugs',
-      note: 'Warmer Teppich für die Raummitte.',
-      preview: function () {
-        var disc = new THREE.Mesh(
-          new THREE.CircleGeometry(1.35, 32),
-          paintedMaterial('gen-rug', 1.6, 1.6, '#4a6440', { roughness: 1 })
-        );
-        disc.rotation.x = -Math.PI / 2;
-        return disc;
-      },
-      place: function () { rug.visible = true; }
-    },
-    {
       id: 'candles', name: 'Kerzen für die Theke', cost: 16, cat: 'light',
       note: 'Drei Kerzen mit warmem Schein.',
       preview: candleCluster,
@@ -5775,7 +5764,7 @@
   var paintGroup = 'wood';
   var plantGroup = 'green';
   var buildGroup = 'racks';
-  var decorGroup = 'rugs';
+  var decorGroup = 'wall';
   var inappGroup = 'blumen';
 
   function chipRow(groups, current, onPick) {
@@ -6163,7 +6152,6 @@
 
     if (shopTab === 'decor') {
       var DECOR_GROUPS = [
-        { id: 'rugs', name: 'Teppiche' },
         { id: 'wall', name: 'Wand' },
         { id: 'light', name: 'Licht' },
         { id: 'plants', name: 'Pflanzendeko' },
