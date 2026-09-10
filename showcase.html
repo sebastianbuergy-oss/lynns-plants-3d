@@ -439,7 +439,7 @@
   <!-- Die Versionsnummer steht sichtbar da, weil Safari die Seite gecacht hat
        und eine alte Fassung als "immer noch kaputt" durchging. Bei jeder
        Aenderung hochzaehlen. -->
-  <div class="mark"><b>Lynn's Plants</b><span>3D PROTOTYP &middot; V17</span></div>
+  <div class="mark"><b>Lynn's Plants</b><span>3D PROTOTYP &middot; V18</span></div>
   <button class="coins" id="coinBtn" type="button"><i></i><b id="coinValue">1000</b><em>+</em></button>
 </header>
 
@@ -1126,7 +1126,86 @@
     return PLANT_MODELS[sum % PLANT_MODELS.length];
   }
 
+  // Gemalte Pflanzen als Tafeln, die zur Kamera schauen. Der Topf ist Teil des
+  // Bildes - deshalb gibt es jede Art in jedem Topf, sonst waere das Umtopfen
+  // nur noch eine Zahl. Faellt eine Datei aus, greift das gebaute Modell.
+  var plantCards = [];
+  var cardUp = new THREE.Vector3(0, 1, 0);
+  var cardQuat = new THREE.Quaternion();
+  var cardParent = new THREE.Quaternion();
+  var cardPos = new THREE.Vector3();
+
+  function plantImage(species, potId) {
+    return ART + 'plants/' + plantSlug(species.name) + '-' + (potId || 'terracotta') + '.webp';
+  }
+
+  function paintedPlant(group, species) {
+    var hoehe = PLANT_HEIGHT[species.style] || 0.46;
+    texLoader.load(plantImage(species, 'terracotta'), function (t) {
+      t.encoding = THREE.sRGBEncoding;
+      t.minFilter = THREE.LinearFilter;
+      t.generateMipmaps = false;
+      var breite = hoehe * (t.image.width / t.image.height);
+      var karte = new THREE.Mesh(
+        new THREE.PlaneGeometry(breite, hoehe),
+        new THREE.MeshBasicMaterial({
+          map: t, transparent: true, alphaTest: 0.28, side: THREE.DoubleSide
+        })
+      );
+      karte.position.y = hoehe / 2;
+      karte.renderOrder = 1;
+      clearPlaceholders(group);
+      var huelle = new THREE.Group();
+      huelle.add(karte);
+      group.add(huelle);
+      group.userData.foliage = huelle;
+      group.userData.card = karte;
+      group.userData.cardHeight = hoehe;
+      karte.userData.owner = group;
+      // Durst faerbt die ganze Tafel, statt einzelne Blattmaterialien.
+      group.userData.tintMats = [{ m: karte.material, base: karte.material.color.clone() }];
+      group.userData.potMats = [];
+      plantCards.push(group);
+    }, undefined, function () {
+      dressPlantModel(group, species);
+    });
+  }
+
+  function updatePlantCards() {
+    for (var i = 0; i < plantCards.length; i++) {
+      var g = plantCards[i];
+      var karte = g.userData.card;
+      if (!karte || !karte.parent) continue;
+      karte.getWorldPosition(cardPos);
+      cardQuat.setFromAxisAngle(cardUp, Math.atan2(
+        camera.position.x - cardPos.x, camera.position.z - cardPos.z));
+      karte.parent.getWorldQuaternion(cardParent);
+      karte.quaternion.copy(cardParent.invert()).multiply(cardQuat);
+    }
+  }
+
+  function setPlantPot(group, potId) {
+    var karte = group.userData.card;
+    var info = group.userData.pick;
+    if (!karte || !info) return false;
+    texLoader.load(plantImage(info.species, potId), function (t) {
+      t.encoding = THREE.sRGBEncoding;
+      t.minFilter = THREE.LinearFilter;
+      t.generateMipmaps = false;
+      karte.material.map = t;
+      karte.material.needsUpdate = true;
+      var h = group.userData.cardHeight;
+      karte.geometry.dispose();
+      karte.geometry = new THREE.PlaneGeometry(h * (t.image.width / t.image.height), h);
+    });
+    return true;
+  }
+
   function dressPlant(group, species) {
+    paintedPlant(group, species);
+  }
+
+  function dressPlantModel(group, species) {
     var name = modelForSpecies(species);
     // Liegt das Modell schon da, wird es sofort eingesetzt statt ueber ein
     // Promise - nur so steht es rechtzeitig fuer das Katalogbild.
@@ -2763,7 +2842,8 @@
   var POTS = [
     { id: 'terracotta', name: 'Terrakotta', colour: '#cd6a36', cost: 8, value: 10, scale: 1 },
     { id: 'sage', name: 'Salbei', colour: '#7d9a7a', cost: 12, value: 16, scale: 1.06 },
-    { id: 'ceramic', name: 'Keramik', colour: '#e0bd8e', cost: 18, value: 24, scale: 1.12 }
+    { id: 'ceramic', name: 'Keramik', colour: '#e0bd8e', cost: 18, value: 24, scale: 1.12 },
+    { id: 'black', name: 'Schwarz', colour: '#2b2b2d', cost: 15, value: 20, scale: 1.06 }
   ];
 
   function openPotSheet() {
@@ -2796,7 +2876,10 @@
     info.pot = pot.id;
     // Value is set, not stacked, so repotting can never be farmed for coins.
     info.price = info.species.price + pot.value;
-    picked.userData.potMats.forEach(function (m) { m.color.set(pot.colour); });
+    // Bei gemalten Pflanzen wird das Bild getauscht, bei gebauten die Farbe.
+    if (!setPlantPot(picked, pot.id)) {
+      picked.userData.potMats.forEach(function (m) { m.color.set(pot.colour); });
+    }
     picked.scale.setScalar(picked.userData.baseScale * pot.scale);
     picked.userData.pop = 1;
     el.potSheet.hidden = true;
@@ -3297,7 +3380,7 @@
       chosen.species.forEach(function (species) {
         var cost = Math.round(species.price * 0.55);
         list.appendChild(offerRow(
-          'art/plants/' + plantSlug(species.name) + '.png',
+          'art/plants/' + plantSlug(species.name) + '-terracotta.webp',
           species.name,
           'Einkauf ' + cost + ' · Verkauf ab ' + species.price + ' Münzen',
           cost + ' ●', coins >= cost && free > 0,
@@ -3920,6 +4003,8 @@
 
     catTail.rotation.z = Math.sin(now / 620) * 0.28;
     catHead.rotation.y = Math.sin(now / 1900) * 0.5;
+
+    updatePlantCards();
 
     for (var b = 0; b < billboards.length; b++) {
       var bb = billboards[b];
