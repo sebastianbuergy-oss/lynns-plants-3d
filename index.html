@@ -469,7 +469,7 @@
        und eine alte Fassung als "immer noch kaputt" durchging. Bei jeder
        Aenderung hochzaehlen. -->
   <div class="mark">
-    <b>Fleur-Blache’s Blumen</b><span>TESTVERSION &middot; V41</span>
+    <b>Fleur-Blache’s Blumen</b><span>TESTVERSION &middot; V42</span>
     <em id="premiumBadge" class="premium-badge" hidden>👑 Premium</em>
   </div>
   <div class="hud-right">
@@ -1898,17 +1898,11 @@
     });
   });
 
-  var PLANT_PACKS = [
-    { id: 'starter', name: 'Starter-Set Grün', pick: ['Calathea', 'Zimmerlinde', 'Schwertfarn', 'Pfeilblatt'], note: 'Vier robuste Grünpflanzen für den Anfang.' },
-    { id: 'bloom', name: 'Blüten-Sortiment', pick: ['Friedenslilie', 'Begonie', 'Usambaraveilchen'], note: 'Drei blühende Sorten für die Auslage.' },
-    { id: 'desert', name: 'Wüsten-Kiste', pick: ['Goldkugelkaktus', 'Echeveria', 'Haworthia', 'Aloe'], note: 'Vier pflegeleichte Sukkulenten.' },
-    { id: 'statement', name: 'Solitär-Paket', pick: ['Geigenfeige', 'Zimmerpalme', 'Drachenbaum'], note: 'Drei grosse Blickfänger.' }
-  ];
-
-  function speciesByName(name) {
-    for (var i = 0; i < SPECIES.length; i++) if (SPECIES[i].name === name) return SPECIES[i];
-    return SPECIES[0];
-  }
+  // PLANT_PACKS gab es einmal als Bequemlichkeits-Bundle am Ladencomputer,
+  // gegen Muenzen und ohne artFrei-Pruefung - man konnte damit Geigenfeige,
+  // Zimmerpalme & Co. kaufen, ohne je das Solitaer-Set freizuschalten. Genau
+  // das sollen die "Pakete" aber nicht sein: die verschiedenen Blumenpakete
+  // sind ein Kauf im Muenzenladen (PLANT_SETS), nicht am Ladencomputer.
 
   // Die Schattenkarte der Sonne deckt 18 m auf 2048 Pixel ab - gut acht
   // Millimeter pro Punkt. Auf einem Regalbrett kommt davon nichts an, und ohne
@@ -5542,7 +5536,7 @@
 
       var chips = document.createElement('div');
       chips.className = 'chips';
-      PLANT_GROUPS.concat([{ id: 'packs', name: 'Pakete' }]).forEach(function (group) {
+      PLANT_GROUPS.forEach(function (group) {
         var chip = document.createElement('button');
         chip.type = 'button';
         chip.textContent = group.name;
@@ -5551,25 +5545,6 @@
         chips.appendChild(chip);
       });
       list.appendChild(chips);
-
-      if (plantGroup === 'packs') {
-        PLANT_PACKS.forEach(function (pack) {
-          var members = pack.pick.map(speciesByName);
-          var full = members.reduce(function (sum, item) { return sum + Math.round(item.price * 0.55); }, 0);
-          var cost = Math.round(full * 0.85);
-          // Gemaltes Bild der ersten Art im Paket statt eines gerenderten
-          // Platzhalter-Modells - das Paket zeigt sonst die alten, flach
-          // eingefärbten Kegel- und Kugelformen statt der Katalogware.
-          list.appendChild(offerRow(
-            'art/plants/' + plantSlug(members[0].name) + '-terracotta.webp',
-            pack.name,
-            pack.note + ' Einzeln ' + full + ', im Paket ' + cost + '.',
-            cost + ' ●',
-            coins >= cost && free >= members.length,
-            function () { orderPack(pack, members, cost); }));
-        });
-        return;
-      }
 
       var chosen = PLANT_GROUPS[0];
       PLANT_GROUPS.forEach(function (group) { if (group.id === plantGroup) chosen = group; });
@@ -5899,18 +5874,6 @@
     info.shelf = shelf;
     say(info.species.name + ' steht jetzt auf: ' + shelf.label + '.');
     movingPlant = null;
-  }
-
-  function orderPack(pack, members, cost) {
-    var free = openSlots();
-    if (coins < cost || free.length < members.length) return;
-    setCoins(coins - cost);
-    members.forEach(function (species, i) {
-      var plant = fillSlot(free[i].shelf, free[i].slot, species);
-      plant.userData.pick.water = 0.75;
-    });
-    renderShop();
-    say(pack.name + ' geliefert: ' + members.length + ' Pflanzen eingeräumt.');
   }
 
   function openShop() {
