@@ -439,7 +439,7 @@
   <!-- Die Versionsnummer steht sichtbar da, weil Safari die Seite gecacht hat
        und eine alte Fassung als "immer noch kaputt" durchging. Bei jeder
        Aenderung hochzaehlen. -->
-  <div class="mark"><b>Lynn's Plants</b><span>3D PROTOTYP &middot; V18</span></div>
+  <div class="mark"><b>Lynn's Plants</b><span>3D PROTOTYP &middot; V19</span></div>
   <button class="coins" id="coinBtn" type="button"><i></i><b id="coinValue">1000</b><em>+</em></button>
 </header>
 
@@ -1882,25 +1882,59 @@
   // Density is what makes the box read as a shop rather than a room.
   var bigLeaf = new THREE.MeshStandardMaterial({ color: '#3c7a44', roughness: 0.66 });
 
-  function floorPlant(x, z, height) {
-    var g = new THREE.Group();
-    var pot = new THREE.Mesh(new THREE.CylinderGeometry(0.26, 0.19, 0.36, 14), potMats[0]);
-    pot.position.y = 0.18;
-    g.add(pot);
-    var soil = new THREE.Mesh(new THREE.CylinderGeometry(0.24, 0.24, 0.04, 12), soilMat);
-    soil.position.y = 0.36;
-    g.add(soil);
-    for (var i = 0; i < 9; i++) {
-      var leaf = new THREE.Mesh(leafGeo, bigLeaf);
-      var up = 0.42 + Math.random() * height;
-      leaf.scale.set(0.2 + Math.random() * 0.09, 0.055, 0.16 + Math.random() * 0.07);
-      leaf.position.set((Math.random() - 0.5) * 0.5, up, (Math.random() - 0.5) * 0.5);
-      leaf.rotation.set((Math.random() - 0.5) * 0.8, Math.random() * Math.PI, (Math.random() - 0.5) * 0.8);
-      g.add(leaf);
+  // Gemalte Deko-Tafel. Steht sie am Boden, bekommt sie einen Kontaktfleck;
+  // haengt sie, eine Schnur zur Decke. Faellt das Bild aus, bleibt der Platz
+  // leer statt dass eine halbe Figur stehenbleibt.
+  var decorCards = [];
+
+  function decorCard(bild, x, z, hoehe, unten, schnur) {
+    texLoader.load(ART + 'decor/' + bild + '.webp', function (t) {
+      t.encoding = THREE.sRGBEncoding;
+      t.minFilter = THREE.LinearFilter;
+      t.generateMipmaps = false;
+      var breite = hoehe * (t.image.width / t.image.height);
+      var karte = new THREE.Mesh(
+        new THREE.PlaneGeometry(breite, hoehe),
+        new THREE.MeshBasicMaterial({
+          map: t, transparent: true, alphaTest: 0.28, side: THREE.DoubleSide
+        })
+      );
+      karte.position.set(x, unten + hoehe / 2, z);
+      karte.renderOrder = 1;
+      scene.add(karte);
+      decorCards.push(karte);
+      if (schnur) {
+        var seil = new THREE.Mesh(
+          new THREE.CylinderGeometry(0.011, 0.011, WALL_H - (unten + hoehe) + 0.1, 5),
+          new THREE.MeshStandardMaterial({ color: '#7d6a4f', roughness: 1 })
+        );
+        seil.position.set(x, (unten + hoehe + WALL_H) / 2, z);
+        scene.add(seil);
+      } else {
+        var fleck = new THREE.Mesh(
+          new THREE.PlaneGeometry(breite * 0.6, breite * 0.34),
+          new THREE.MeshBasicMaterial({ map: blobShadow(), transparent: true, depthWrite: false })
+        );
+        fleck.rotation.x = -Math.PI / 2;
+        fleck.position.set(x, unten + 0.014, z);
+        scene.add(fleck);
+      }
+    });
+  }
+
+  function updateDecorCards() {
+    for (var i = 0; i < decorCards.length; i++) {
+      var k = decorCards[i];
+      k.rotation.y = Math.atan2(camera.position.x - k.position.x,
+                                camera.position.z - k.position.z);
     }
-    g.position.set(x, 0, z);
-    markShadow(g);
-    scene.add(g);
+  }
+
+  var floorPlantIndex = 0;
+
+  function floorPlant(x, z, height) {
+    decorCard(floorPlantIndex++ % 2 ? 'd-boden2' : 'd-boden1',
+              x, z, 1.15 + height * 0.35, 0, false);
   }
 
 
@@ -1922,28 +1956,10 @@
   }
 
 
+  var hangIndex = 0;
+
   function hangingPlant(x, z) {
-    var g = new THREE.Group();
-    var cord = new THREE.Mesh(
-      new THREE.CylinderGeometry(0.012, 0.012, 0.7, 5),
-      new THREE.MeshStandardMaterial({ color: '#7d6a4f', roughness: 1 })
-    );
-    cord.position.y = 2.9;
-    g.add(cord);
-    var bowl = new THREE.Mesh(new THREE.SphereGeometry(0.2, 12, 8, 0, Math.PI * 2, 0, Math.PI / 2), potMats[1]);
-    bowl.rotation.x = Math.PI;
-    bowl.position.y = 2.55;
-    g.add(bowl);
-    for (var i = 0; i < 7; i++) {
-      var vine = new THREE.Mesh(leafGeo, bigLeaf);
-      vine.scale.set(0.1, 0.035, 0.09);
-      vine.position.set((Math.random() - 0.5) * 0.42, 2.2 + Math.random() * 0.45, (Math.random() - 0.5) * 0.42);
-      vine.rotation.set((Math.random() - 0.5) * 1, Math.random() * Math.PI, (Math.random() - 0.5) * 1);
-      g.add(vine);
-    }
-    g.position.set(x, 0, z);
-    markShadow(g);
-    scene.add(g);
+    decorCard(hangIndex++ % 2 ? 'd-ampel2' : 'd-ampel1', x, z, 0.95, 1.85, true);
   }
 
 
@@ -4005,6 +4021,7 @@
     catHead.rotation.y = Math.sin(now / 1900) * 0.5;
 
     updatePlantCards();
+    updateDecorCards();
 
     for (var b = 0; b < billboards.length; b++) {
       var bb = billboards[b];
