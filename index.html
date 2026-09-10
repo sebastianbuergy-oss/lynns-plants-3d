@@ -74,6 +74,21 @@
     padding:calc(10px + env(safe-area-inset-top)) calc(14px + env(safe-area-inset-right)) 10px calc(14px + env(safe-area-inset-left));
     pointer-events:none;
   }
+  .hud-right{
+    pointer-events:auto;
+    display:flex;flex-direction:column;align-items:flex-end;gap:6px;
+  }
+  .level{
+    display:flex;flex-direction:column;gap:4px;align-items:flex-end;
+    padding:6px 11px 7px;border-radius:14px;
+    background:rgba(20,38,24,.82);
+    border:1px solid rgba(244,236,218,.18);
+    color:var(--cream);
+    backdrop-filter:blur(8px);
+  }
+  .level b{font-size:11px;font-weight:800;letter-spacing:.06em}
+  .level i{display:block;width:74px;height:5px;border-radius:3px;background:rgba(244,236,218,.22)}
+  .level em{display:block;height:100%;border-radius:3px;background:var(--glow);width:0}
   .mark{
     display:flex;flex-direction:column;line-height:1;
     text-shadow:0 2px 10px rgba(10,22,12,.65);
@@ -441,8 +456,11 @@
   <!-- Die Versionsnummer steht sichtbar da, weil Safari die Seite gecacht hat
        und eine alte Fassung als "immer noch kaputt" durchging. Bei jeder
        Aenderung hochzaehlen. -->
-  <div class="mark"><b>Lynn's Plants</b><span>3D PROTOTYP &middot; V33</span></div>
-  <button class="coins" id="coinBtn" type="button"><i></i><b id="coinValue">1000</b><em>+</em></button>
+  <div class="mark"><b>Lynn's Plants</b><span>3D PROTOTYP &middot; V35</span></div>
+  <div class="hud-right">
+    <div class="level" id="levelBox"><b id="levelValue">LV 1</b><i><em id="levelFill"></em></i></div>
+    <button class="coins" id="coinBtn" type="button"><i></i><b id="coinValue">1000</b><em>+</em></button>
+  </div>
 </header>
 
 <button class="back" id="backBtn" type="button">← Ganzer Laden</button>
@@ -2526,6 +2544,7 @@
   window.__inspect.guest = guest;
   window.__inspect.walkTo = walkTo;
   window.__inspect.stepPerson = stepPerson;
+  window.__inspect.gibXp = gibXp;
 
   // ------------------------------------------------------------------- cat
   var cat = new THREE.Group();
@@ -2882,6 +2901,107 @@
     stepPerson(guest, dt);
   }
 
+  // ------------------------------------------------------------------ Personal
+  // Zwei Anstellungen, die erst ab einer Stufe zu haben sind. Die Kassiererin
+  // steht an der Theke und holt fuenfzehn Prozent mehr heraus; der Lagerist
+  // laeuft herum und giesst, was am ehesten eingeht - das ist die Arbeit, die
+  // sonst von Hand anfaellt und die man beim Einrichten leicht vergisst.
+  var kassiererin = null;
+  var lagerist = null;
+  var lagerZiel = null;
+  var lagerPause = 0;
+
+  var PERSONAL = [
+    {
+      id: 'cashier', name: 'Kassiererin', kosten: 320, stufe: 3,
+      note: 'Steht an der Kasse und holt 15% mehr aus jedem Verkauf.'
+    },
+    {
+      id: 'keeper', name: 'Lagerist', kosten: 480, stufe: 5,
+      note: 'Läuft durch den Laden und giesst, was am ehesten eingeht.'
+    }
+  ];
+
+  function stelleEin(id) {
+    if (id === 'cashier' && !kassiererin) {
+      kassiererin = buildPerson({
+        skin: '#d8a97f', top: '#5d6f8a', legs: '#3a3e45',
+        inner: '#efe7d6', hair: '#4a3222', shoes: '#4e372a',
+        bun: true, speed: 1.4, stride: 1.28
+      });
+      kassiererin.pos.set(-1.9, 0.5);
+      kassiererin.heading = Math.PI;
+      kassiererin.root.position.set(-1.9, 0, 0.5);
+      contactBlob(kassiererin.root, 0.6);
+      window.__inspect.kassiererin = kassiererin;
+      say('Die Kassiererin steht an der Theke.');
+    }
+    if (id === 'keeper' && !lagerist) {
+      lagerist = buildPerson({
+        skin: '#c98d63', top: '#7a6a4a', legs: '#4a4a4a',
+        hair: '#2f2a24', shoes: '#3f342a',
+        bun: false, speed: 1.55, stride: 1.28
+      });
+      lagerist.pos.set(-3.4, -3.2);
+      lagerist.root.position.set(-3.4, 0, -3.2);
+      contactBlob(lagerist.root, 0.6);
+      window.__inspect.lagerist = lagerist;
+      say('Der Lagerist fängt an zu giessen.');
+    }
+  }
+
+  function pruefePersonal() {
+    // Nur ein Hinweis - eingestellt wird im Ladencomputer.
+    PERSONAL.forEach(function (p) {
+      if (level === p.stufe && !bought['personal-' + p.id]) {
+        say('Stufe ' + p.stufe + ': ' + p.name + ' kann eingestellt werden.');
+      }
+    });
+  }
+
+  function stepLagerist(dt) {
+    if (!lagerist) return;
+    lagerPause -= dt;
+    if (!lagerist.target && lagerPause <= 0) {
+      // Die durstigste lebende Pflanze suchen
+      var schlimmste = null;
+      var wert = 0.55;
+      for (var i = 0; i < sellables.length; i++) {
+        var p = sellables[i];
+        if (!p.parent) continue;
+        var info = p.userData.pick;
+        if (info.dead) continue;
+        if (info.water < wert) { wert = info.water; schlimmste = p; }
+      }
+      if (schlimmste) {
+        schlimmste.getWorldPosition(guestScratch);
+        lagerZiel = schlimmste;
+        walkTo(lagerist, guestScratch.x, guestScratch.z + 0.9);
+      } else {
+        lagerPause = 2.5;
+      }
+    }
+    // Nicht auf punktgenaue Ankunft warten: der Zielpunkt liegt im
+    // Ausweichkreis des Regals und wird davon weggeschoben, der Lagerist
+    // pendelt dann davor. Giessen, sobald er in Reichweite ist.
+    if (lagerZiel) {
+      lagerZiel.getWorldPosition(guestScratch);
+      var nah = Math.hypot(guestScratch.x - lagerist.pos.x,
+                           guestScratch.z - lagerist.pos.y) < 1.9;
+      if (nah || !lagerist.target) {
+        var info2 = lagerZiel.userData.pick;
+        if (info2 && !info2.dead) {
+          info2.water = Math.min(1, info2.water + 0.55);
+          if (picked === lagerZiel) refreshTray();
+        }
+        lagerZiel = null;
+        lagerist.target = null;
+        lagerPause = 1.4;
+      }
+    }
+    stepPerson(lagerist, dt);
+  }
+
   // ---------------------------------------------------------------- camera
   // The camera orbits a target instead of sitting at fixed points, so two
   // fingers can swing the whole shop around without fighting the focus system.
@@ -2971,6 +3091,8 @@
     storeSheet: document.getElementById('storeSheet'),
     storeList: document.getElementById('storeList'),
     storeClose: document.getElementById('storeClose'),
+    levelValue: document.getElementById('levelValue'),
+    levelFill: document.getElementById('levelFill'),
     boot: document.getElementById('boot')
   };
 
@@ -2984,6 +3106,37 @@
     el.shopCoins.textContent = coins;
     if (!el.shopSheet.hidden) renderShop();
     if (!el.storeSheet.hidden) renderStore();
+  }
+
+  // Fortschritt: jede verkaufte Pflanze bringt so viele Punkte, wie sie wert
+  // war. Die Stufen wachsen, damit spaetere Stufen etwas bedeuten.
+  var STUFEN = [0, 160, 420, 850, 1500, 2400, 3600, 5200];
+  var xp = 0;
+  var level = 1;
+
+  function stufeFuer(punkte) {
+    var st = 1;
+    for (var i = 0; i < STUFEN.length; i++) if (punkte >= STUFEN[i]) st = i + 1;
+    return st;
+  }
+
+  function zeigeLevel() {
+    el.levelValue.textContent = 'LV ' + level;
+    var unten = STUFEN[level - 1] || 0;
+    var oben = STUFEN[level] || (unten + 1600);
+    var anteil = Math.max(0, Math.min(1, (xp - unten) / (oben - unten)));
+    el.levelFill.style.width = Math.round(anteil * 100) + '%';
+  }
+
+  function gibXp(punkte) {
+    xp += punkte;
+    var neu = stufeFuer(xp);
+    if (neu > level) {
+      level = neu;
+      say('Stufe ' + level + ' erreicht.');
+      pruefePersonal();
+    }
+    zeigeLevel();
   }
 
   var DRY_COLOUR = new THREE.Color('#b39a4c');
@@ -4086,9 +4239,30 @@
         { id: 'racks', name: 'Regale' },
         { id: 'tables', name: 'Tische & Bänke' },
         { id: 'wall', name: 'Wand' },
-        { id: 'rooms', name: 'Räume' }
+        { id: 'rooms', name: 'Räume' },
+        { id: 'staff', name: 'Personal' }
       ];
       list.appendChild(chipRow(BUILD_GROUPS, buildGroup, function (id) { buildGroup = id; renderShop(); }));
+
+      if (buildGroup === 'staff') {
+        PERSONAL.forEach(function (p) {
+          var da = !!bought['personal-' + p.id];
+          var offen = level >= p.stufe;
+          list.appendChild(offerRow(
+            p.id === 'cashier' ? '🧑‍🌾' : '📦',
+            p.name,
+            da ? 'Angestellt.' : (offen ? p.note : 'Ab Stufe ' + p.stufe + ' – du bist auf ' + level + '.'),
+            da ? 'Angestellt' : (offen ? p.kosten + ' ●' : 'Stufe ' + p.stufe),
+            !da && offen && coins >= p.kosten,
+            function () {
+              setCoins(coins - p.kosten);
+              bought['personal-' + p.id] = true;
+              stelleEin(p.id);
+              renderShop();
+            }));
+        });
+        return;
+      }
 
       if (buildGroup === 'rooms') {
         list.appendChild(offerRow('\u2302', 'Gew\u00e4chshaus draussen',
@@ -4403,13 +4577,16 @@
   // packs, so plants only turn into money when a customer actually buys one.
   function sellToGuest(plant) {
     var info = plant.userData.pick;
-    setCoins(coins + (info.price || info.species.price));
+    var erloes = Math.round((info.price || info.species.price) * (kassiererin ? 1.15 : 1));
+    setCoins(coins + erloes);
+    gibXp(info.price || info.species.price);
     if (info.slot) info.slot.plant = null;
     var index = sellables.indexOf(plant);
     if (index >= 0) sellables.splice(index, 1);
     if (picked === plant) clearPick();
     if (plant.parent) plant.parent.remove(plant);
-    say('Verkauft: ' + info.species.name + ' für ' + (info.price || info.species.price) + ' Münzen.');
+    say('Verkauft: ' + info.species.name + ' für ' + erloes + ' Münzen.'
+      + (kassiererin ? ' (Kasse +15%)' : ''));
   }
 
   el.back.addEventListener('click', function () {
@@ -4699,6 +4876,8 @@
 
     stepPerson(lynn, dt);
     stepGuest(dt);
+    if (kassiererin) stepPerson(kassiererin, dt);
+    stepLagerist(dt);
     tendPlants(dt);
     if (picked) refreshTray();
 
@@ -4762,6 +4941,7 @@
   }
 
   setCoins(coins);
+  zeigeLevel();
   requestAnimationFrame(frame);
 })();
 </script>
