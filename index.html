@@ -105,6 +105,11 @@
     text-align:center;color:var(--moss);margin:8px 0 2px;
     font-variant-numeric:tabular-nums;
   }
+  .store-head{
+    margin:14px 0 2px;font-size:10px;font-weight:800;letter-spacing:.08em;
+    text-transform:uppercase;color:var(--ink-soft);
+  }
+  .store-head:first-child{margin-top:0}
   .mark b{
     font-family:var(--display);
     font-weight:700;
@@ -469,7 +474,7 @@
        und eine alte Fassung als "immer noch kaputt" durchging. Bei jeder
        Aenderung hochzaehlen. -->
   <div class="mark">
-    <b>Fleur-Blache’s Blumen</b><span>TESTVERSION &middot; V42</span>
+    <b>Fleur-Blache’s Blumen</b><span>TESTVERSION &middot; V44</span>
     <em id="premiumBadge" class="premium-badge" hidden>👑 Premium</em>
   </div>
   <div class="hud-right">
@@ -5238,22 +5243,22 @@
               'Usambaraveilchen', 'Bogenhanf', 'Grünlilie']
     },
     {
-      id: 'bloom', name: 'Blütenzauber', cost: 95,
+      id: 'bloom', name: 'Blütenzauber', preis: 'CHF 3.—',
       note: 'Vier weitere blühende Arten, von der Friedenslilie bis zur Orchidee.',
       arten: ['Friedenslilie', 'Orchidee', 'Anthurie', 'Begonie']
     },
     {
-      id: 'desert', name: 'Wüstenkiste', cost: 70,
+      id: 'desert', name: 'Wüstenkiste', preis: 'CHF 2.—',
       note: 'Drei weitere Arten, die kaum Wasser brauchen.',
       arten: ['Säulenkaktus', 'Haworthia', 'Aloe']
     },
     {
-      id: 'solo', name: 'Grosse Solitäre', cost: 165,
+      id: 'solo', name: 'Grosse Solitäre', preis: 'CHF 4.—',
       note: 'Fünf Arten für den grossen Auftritt.',
       arten: ['Geigenfeige', 'Zimmerpalme', 'Drachenbaum', 'Gummibaum', 'Pfeilblatt']
     },
     {
-      id: 'hang', name: 'Hängende Gärten', cost: 80,
+      id: 'hang', name: 'Hängende Gärten', preis: 'CHF 2.—',
       note: 'Drei weitere rankende Arten für Ampeln und Kanten.',
       arten: ['Efeutute', 'Perlenkette', 'Efeu']
     }
@@ -5267,14 +5272,15 @@
   var unlockedSets = { basis: true };
   var premium = false;
 
-  // Premium schaltet alle Sets auf einmal frei - im fertigen Spiel eine
-  // einzelne Zahlung im App Store, hier wie die Sets selbst gegen Münzen,
-  // damit sich der Ablauf spielen lässt.
-  var PREMIUM_COST = 320;
+  // Premium, die Pflanzensets, die Grosspakete, Deko-Sets und
+  // Einrichtungs-Sets sind alle Echtgeld: im Prototyp ohne echte Zahlung,
+  // aber mit CHF-Preis und ohne Münzabzug - genau wie die Muenzpakete
+  // selbst schon vorgemacht haben. Nur was am Ladencomputer einzeln bestellt
+  // wird, kostet weiter Münzen.
+  var PREMIUM_PREIS = 'CHF 9.—';
 
   function kaufePremium() {
-    if (premium || coins < PREMIUM_COST) return;
-    setCoins(coins - PREMIUM_COST);
+    if (premium) return;
     premium = true;
     bought['premium'] = true;
     PLANT_SETS.forEach(function (satz) { unlockedSets[satz.id] = true; });
@@ -5282,6 +5288,115 @@
     say('Premium freigeschaltet – alle Pflanzensets sind jetzt dauerhaft offen.');
     renderStore();
     if (!el.shopSheet.hidden) renderShop();
+  }
+
+  // -------------------------------------------------------- Gross-Pakete
+  // 20 Stück einer Art auf einen Schlag - eine Art je Kategorie, und zwar
+  // genau die, die ohnehin schon frei ist. So bleibt es eine Bequemlichkeit
+  // (Zeit und Münzen sparen), nie eine Abkürzung an einem Pflanzenset vorbei.
+  function artNachName(name) {
+    for (var i = 0; i < SPECIES.length; i++) if (SPECIES[i].name === name) return SPECIES[i];
+    return SPECIES[0];
+  }
+
+  var GROSSPAKETE = [
+    { id: 'gross-gruen', name: '20× Monstera', preis: 'CHF 5.—', art: 'Monstera',
+      note: 'Füllt viele Regale auf einen Schlag – kein Klicken, keine Münzen.' },
+    { id: 'gross-blueh', name: '20× Usambaraveilchen', preis: 'CHF 5.—', art: 'Usambaraveilchen',
+      note: 'Zwanzig blühende Töpfe auf einmal.' },
+    { id: 'gross-hang', name: '20× Grünlilie', preis: 'CHF 5.—', art: 'Grünlilie',
+      note: 'Zwanzig Hängepflanzen auf einmal.' },
+    { id: 'gross-sukk', name: '20× Echeveria', preis: 'CHF 5.—', art: 'Echeveria',
+      note: 'Zwanzig Sukkulenten auf einmal.' },
+    { id: 'gross-gross', name: '20× Bogenhanf', preis: 'CHF 5.—', art: 'Bogenhanf',
+      note: 'Zwanzig grosse Pflanzen auf einmal.' }
+  ];
+  var GROSSPAKET_MENGE = 20;
+
+  function kaufeGrosspaket(paket) {
+    var frei = openSlots();
+    var art = artNachName(paket.art);
+    var n = Math.min(GROSSPAKET_MENGE, frei.length);
+    if (!n) { say('Kein Platz frei – baue zuerst mehr Regale.'); return; }
+    for (var i = 0; i < n; i++) {
+      var p = fillSlot(frei[i].shelf, frei[i].slot, art);
+      p.userData.pick.water = 0.75;
+    }
+    renderShop();
+    renderStore();
+    say(n < GROSSPAKET_MENGE
+      ? paket.name + ': ' + n + ' von ' + GROSSPAKET_MENGE + ' eingeraeumt – der Rest passt nicht mehr.'
+      : paket.name + ' geliefert: ' + n + ' Pflanzen eingeraeumt.');
+  }
+
+  // -------------------------------------------------------------- Deko-Sets
+  var DECO_SETS = [
+    { id: 'deko-licht', name: 'Licht-Set', preis: 'CHF 3.—',
+      note: 'Kerzen, Laterne und die LED-Kette zusammen.',
+      teile: ['candles', 'lantern', 'led'] },
+    { id: 'deko-wand', name: 'Wand-Deko-Set', preis: 'CHF 3.—',
+      note: 'Bilder, Wandspiegel und Wimpelkette zusammen.',
+      teile: ['art', 'mirror', 'bunting'] },
+    { id: 'deko-garten', name: 'Garten-Set', preis: 'CHF 4.—',
+      note: 'Gartenfackeln, Lichterkette und Stehlampe zusammen.',
+      teile: ['torches', 'lights', 'lamp'] }
+  ];
+
+  function dekoSetFertig(set) {
+    return set.teile.every(function (id) { return bought[id]; });
+  }
+
+  function kaufeDekoSet(set) {
+    var neu = 0;
+    set.teile.forEach(function (id) {
+      if (bought[id]) return;
+      var item = DECOR.filter(function (d) { return d.id === id; })[0];
+      if (!item) return;
+      bought[id] = true;
+      item.place();
+      neu++;
+    });
+    renderShop();
+    renderStore();
+    say(set.name + (neu < set.teile.length ? ' geliefert (Rest stand schon im Laden).' : ' geliefert.'));
+  }
+
+  // ------------------------------------------------------ Einrichtungs-Sets
+  var EINRICHTUNG_SETS = [
+    { id: 'einricht-warm', name: 'Warmes Ambiente', preis: 'CHF 3.—',
+      note: 'Nussbaum-Holz, warmgraue Wände, dunkle Dielen – auf einen Klick.',
+      holz: 'braun', wand: 'warmgrau', boden: 'holz-braun' },
+    { id: 'einricht-frisch', name: 'Frisches Grün', preis: 'CHF 3.—',
+      note: 'Salbei-Holz, salbeigrüne Wände, Zementfliesen – auf einen Klick.',
+      holz: 'salbei', wand: 'salbei', boden: 'muster-zement' }
+  ];
+
+  function kaufeEinrichtungsSet(set) {
+    bought['farbe-holz-' + set.holz] = true;
+    bought['farbe-wand-' + set.wand] = true;
+    bought['farbe-boden-' + set.boden] = true;
+    setzeHolz(set.holz);
+    setzeWand(set.wand);
+    setzeBoden(set.boden);
+    renderShop();
+    renderStore();
+    say(set.name + ' angewendet.');
+  }
+
+  // ------------------------------------------------------------ Raeume-Paket
+  var RAEUME_PAKET = {
+    id: 'raeume-beide', name: 'Gewächshaus + Feld', preis: 'CHF 4.—',
+    note: 'Beide Erweiterungen hinter dem Haus auf einen Schlag.'
+  };
+
+  function kaufeRaeumePaket() {
+    var beideSchonDa = outdoor && meadowBought;
+    if (!outdoor) openGreenhouse();
+    if (!meadowBought) openMeadow();
+    bought[RAEUME_PAKET.id] = true;
+    if (!beideSchonDa) say('Gewächshaus und Feld stehen bereit.');
+    renderShop();
+    renderStore();
   }
 
   // Werbevideos: freiwillig, bringen Münzen, kein echtes Netzwerk dahinter.
@@ -5425,6 +5540,67 @@
   // Diese Funktion wurde an zwei Stellen aufgerufen, aber nie geschrieben:
   // ein Tipp auf die Muenzen oben rechts oeffnete ein leeres Blatt und warf
   // einen Fehler. Jetzt stehen hier die Muenzpakete und die Pflanzensets.
+  function abschnitt(list, titel) {
+    var h = document.createElement('p');
+    h.className = 'store-head';
+    h.textContent = titel;
+    list.appendChild(h);
+  }
+
+  // Zwei Sorten Zeilen: Münzen (verdient, im Laden ausgegeben) und Echtgeld
+  // (CHF-Preis in der Notiz, „Kaufen“ ohne Münzabzug – im fertigen Spiel
+  // der Apple-Kaufdialog). Nie gemischt in derselben Kategorie, das war genau
+  // der Fehler bei den alten Pflanzen-„Paketen“ am Ladencomputer.
+  function echtgeldZeile(list, icon, titel, note, preis, gekauft, kaufen) {
+    list.appendChild(offerRow(icon, titel,
+      note + ' · ' + preis, gekauft ? 'Gekauft' : 'Kaufen', !gekauft, kaufen));
+  }
+
+  function renderInAppPflanzen(list) {
+    abschnitt(list, 'Pflanzensets – dauerhaft freischalten');
+    PLANT_SETS.forEach(function (satz) {
+      if (satz.cost === 0) return;
+      var frei = !!unlockedSets[satz.id];
+      echtgeldZeile(list, 'art/plants/' + plantSlug(satz.arten[0]) + '-terracotta.webp',
+        satz.name, frei ? satz.arten.length + ' Arten freigeschaltet' : satz.note,
+        satz.preis, frei,
+        function () {
+          unlockedSets[satz.id] = true;
+          say(satz.name + ' freigeschaltet – ' + satz.arten.length + ' neue Arten im Ladencomputer.');
+          renderShop(); renderStore();
+        });
+    });
+    abschnitt(list, 'Grosspakete – sofort geliefert');
+    GROSSPAKETE.forEach(function (p) {
+      echtgeldZeile(list, 'art/plants/' + plantSlug(p.art) + '-terracotta.webp',
+        p.name, p.note, p.preis, false, function () { kaufeGrosspaket(p); });
+    });
+  }
+
+  function renderInAppDeko(list) {
+    abschnitt(list, 'Deko-Sets');
+    DECO_SETS.forEach(function (set) {
+      echtgeldZeile(list, photo('dekoset-' + set.id, function () { return DECOR.filter(function (d) { return d.id === set.teile[0]; })[0].preview(); }),
+        set.name, set.note, set.preis, dekoSetFertig(set), function () { kaufeDekoSet(set); });
+    });
+  }
+
+  function renderInAppEinrichten(list) {
+    abschnitt(list, 'Einrichtungs-Sets');
+    EINRICHTUNG_SETS.forEach(function (set) {
+      var aktiv = gewaehlt.holz === set.holz && gewaehlt.wand === set.wand && gewaehlt.boden === set.boden;
+      echtgeldZeile(list, vorschauBild('holz-' + set.holz),
+        set.name, aktiv ? 'Zurzeit im Laden' : set.note, set.preis, false,
+        function () { kaufeEinrichtungsSet(set); });
+    });
+  }
+
+  function renderInAppRaeume(list) {
+    abschnitt(list, 'Räume');
+    echtgeldZeile(list, '⌂', RAEUME_PAKET.name, RAEUME_PAKET.note, RAEUME_PAKET.preis,
+      !!bought[RAEUME_PAKET.id], kaufeRaeumePaket);
+  }
+
   function renderStore() {
     var list = el.storeList;
     list.textContent = '';
@@ -5434,23 +5610,23 @@
     kopf.textContent = 'Im Prototyp ohne echte Zahlung: antippen schaltet frei.';
     list.appendChild(kopf);
 
+    abschnitt(list, 'Premium & Werbung');
     list.appendChild(offerRow(
       '👑', 'Premium – alles freigeschaltet',
-      premium ? 'Aktiv – alle Pflanzensets sind offen.'
-              : 'Schaltet alle Pflanzensets auf einmal frei. Einmalig, im App Store später eine einzelne Zahlung.',
-      premium ? 'Aktiv' : PREMIUM_COST + ' ●',
-      !premium && coins >= PREMIUM_COST,
-      kaufePremium));
+      (premium ? 'Aktiv – alle Pflanzensets sind offen.'
+               : 'Schaltet alle Pflanzensets auf einmal frei.') + ' · ' + PREMIUM_PREIS,
+      premium ? 'Aktiv' : 'Kaufen', !premium, kaufePremium));
 
     list.appendChild(offerRow(
       '🎬', 'Werbevideo ansehen',
       adsGesehen >= AD_LIMIT
         ? 'Für heute aufgebraucht – komm später wieder.'
-        : '+' + AD_LOHN + ' Münzen · noch ' + (AD_LIMIT - adsGesehen) + '× heute. Werbevideos gibt es auch mit Premium weiter.',
+        : '+' + AD_LOHN + ' Münzen · noch ' + (AD_LIMIT - adsGesehen) + '× heute.',
       adsGesehen >= AD_LIMIT ? 'Aufgebraucht' : 'Ansehen',
       adsGesehen < AD_LIMIT && !adLaeuft,
       zeigeWerbung, true));
 
+    abschnitt(list, 'Münzenpakete');
     COIN_PACKS.forEach(function (pack) {
       list.appendChild(offerRow('🪙', pack.name,
         pack.coins + ' Münzen · ' + pack.preis, 'Kaufen', true,
@@ -5460,23 +5636,10 @@
         }));
     });
 
-    PLANT_SETS.forEach(function (satz) {
-      if (satz.cost === 0) return;
-      var frei = !!unlockedSets[satz.id];
-      list.appendChild(offerRow(
-        'art/plants/' + plantSlug(satz.arten[0]) + '-terracotta.webp',
-        satz.name,
-        frei ? satz.arten.length + ' Arten freigeschaltet' : satz.note,
-        frei ? 'Freigeschaltet' : satz.cost + ' ●',
-        !frei && coins >= satz.cost,
-        function () {
-          setCoins(coins - satz.cost);
-          unlockedSets[satz.id] = true;
-          say(satz.name + ' freigeschaltet – ' + satz.arten.length
-            + ' neue Arten im Ladencomputer.');
-          renderStore();
-        }));
-    });
+    renderInAppPflanzen(list);
+    renderInAppDeko(list);
+    renderInAppEinrichten(list);
+    renderInAppRaeume(list);
   }
 
   function renderShop() {
@@ -5503,8 +5666,11 @@
       list.appendChild(chipRow(
         [{ id: 'wood', name: 'Regale & Möbel' },
          { id: 'wall', name: 'Wände' },
-         { id: 'floor', name: 'Boden' }],
+         { id: 'floor', name: 'Boden' },
+         { id: 'inapp', name: 'In-App' }],
         paintGroup, function (id) { paintGroup = id; renderShop(); }));
+
+      if (paintGroup === 'inapp') { renderInAppEinrichten(list); return; }
 
       if (paintGroup === 'wood') {
         HOLZ_AUSFUEHRUNGEN.forEach(function (e) {
@@ -5536,7 +5702,7 @@
 
       var chips = document.createElement('div');
       chips.className = 'chips';
-      PLANT_GROUPS.forEach(function (group) {
+      PLANT_GROUPS.concat([{ id: 'inapp', name: 'In-App' }]).forEach(function (group) {
         var chip = document.createElement('button');
         chip.type = 'button';
         chip.textContent = group.name;
@@ -5545,6 +5711,8 @@
         chips.appendChild(chip);
       });
       list.appendChild(chips);
+
+      if (plantGroup === 'inapp') { renderInAppPflanzen(list); return; }
 
       var chosen = PLANT_GROUPS[0];
       PLANT_GROUPS.forEach(function (group) { if (group.id === plantGroup) chosen = group; });
@@ -5566,9 +5734,12 @@
         { id: 'tables', name: 'Tische & Bänke' },
         { id: 'wall', name: 'Wand' },
         { id: 'rooms', name: 'Räume' },
-        { id: 'staff', name: 'Personal' }
+        { id: 'staff', name: 'Personal' },
+        { id: 'inapp', name: 'In-App' }
       ];
       list.appendChild(chipRow(BUILD_GROUPS, buildGroup, function (id) { buildGroup = id; renderShop(); }));
+
+      if (buildGroup === 'inapp') { renderInAppRaeume(list); return; }
 
       if (buildGroup === 'staff') {
         PERSONAL.forEach(function (p) {
@@ -5643,9 +5814,11 @@
         { id: 'rugs', name: 'Teppiche' },
         { id: 'wall', name: 'Wand' },
         { id: 'light', name: 'Licht' },
-        { id: 'plants', name: 'Pflanzendeko' }
+        { id: 'plants', name: 'Pflanzendeko' },
+        { id: 'inapp', name: 'In-App' }
       ];
       list.appendChild(chipRow(DECOR_GROUPS, decorGroup, function (id) { decorGroup = id; renderShop(); }));
+      if (decorGroup === 'inapp') { renderInAppDeko(list); return; }
       DECOR.filter(function (item) { return item.cat === decorGroup; }).forEach(function (item) {
         list.appendChild(offerRow(photo('decor-' + item.id, item.preview), item.name,
           bought[item.id] ? 'Steht im Laden.' : item.note,
