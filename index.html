@@ -9,7 +9,7 @@
 <meta name="apple-mobile-web-app-title" content="Lynn's Plants">
 <meta name="theme-color" content="#22351f">
 <meta name="robots" content="noindex">
-<title>Lynn's Plants 3D</title>
+<title>Fleur-Blache’s Blumen</title>
 <style>
   html,body{margin:0;padding:0}
   img{max-width:100%}
@@ -456,7 +456,7 @@
   <!-- Die Versionsnummer steht sichtbar da, weil Safari die Seite gecacht hat
        und eine alte Fassung als "immer noch kaputt" durchging. Bei jeder
        Aenderung hochzaehlen. -->
-  <div class="mark"><b>Lynn's Plants</b><span>3D PROTOTYP &middot; V39</span></div>
+  <div class="mark"><b>Fleur-Blache’s Blumen</b><span>TESTVERSION &middot; V40</span></div>
   <div class="hud-right">
     <div class="level" id="levelBox"><b id="levelValue">LV 1</b><i><em id="levelFill"></em></i></div>
     <button class="coins" id="coinBtn" type="button"><i></i><b id="coinValue">1000</b><em>+</em></button>
@@ -522,7 +522,7 @@
   </div>
 </div>
 
-<div class="boot" id="boot"><b>Lynn's Plants</b><span>Der Laden wird aufgebaut …</span></div>
+<div class="boot" id="boot"><b>Fleur-Blache’s Blumen</b><span>Der Laden wird aufgebaut …</span></div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js" crossorigin="anonymous"></script>
 <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js" crossorigin="anonymous"></script>
@@ -1322,15 +1322,17 @@
     g.fillRect(14, 14, 228, 356);
     g.fillStyle = '#f3ead6';
     g.textAlign = 'center';
-    g.font = 'bold 44px Georgia, serif';
-    g.fillText('Lynn\u2019s', 128, 92);
-    g.fillText('Plants', 128, 142);
+    // Der Name steht in drei Zeilen - in einer passt er nicht auf die Tafel.
+    g.font = 'bold 40px Georgia, serif';
+    g.fillText('Fleur-', 128, 70);
+    g.fillText('Blache\u2019s', 128, 114);
+    g.fillText('Blumen', 128, 158);
     g.strokeStyle = 'rgba(243,234,214,0.6)';
     g.lineWidth = 3;
-    g.beginPath(); g.moveTo(52, 170); g.lineTo(204, 170); g.stroke();
+    g.beginPath(); g.moveTo(52, 184); g.lineTo(204, 184); g.stroke();
     g.font = '26px Georgia, serif';
-    g.fillText('Pflanzen', 128, 214);
-    g.fillText('T\u00f6pfe \u00b7 Erde', 128, 252);
+    g.fillText('Pflanzen', 128, 226);
+    g.fillText('T\u00f6pfe \u00b7 Erde', 128, 262);
     g.fillStyle = '#9bc27f';
     g.font = 'bold 30px Georgia, serif';
     g.fillText('Herein!', 128, 322);
@@ -2984,6 +2986,12 @@
     var b = bewegungen[art];
     var faktor = (vorlage.hueftRuhe && b.hueftRuhe) ? vorlage.hueftRuhe / b.hueftRuhe : 1;
     var clip = b.clip.clone();
+    // Nur Spuren, deren Knochen es in dieser Figur gibt. Findet three.js den
+    // Knochen einer Spur nicht, nimmt es stattdessen die ganze Figur - dann
+    // schiebt die Hueftspur sie hundert Meter in die Luft.
+    clip.tracks = clip.tracks.filter(function (tr) {
+      return !!vorlage.szene.getObjectByName(tr.name.split('.')[0]);
+    });
     clip.tracks.forEach(function (tr) {
       if (tr.name !== 'mixamorigHips.position') return;
       for (var i = 0; i < tr.values.length; i++) tr.values[i] *= faktor;
@@ -2992,30 +3000,45 @@
     return clip;
   }
 
+  // Lynn, der Lagerist und die Filialleiterin haben ihre feste Figur; alle
+  // anderen kommen reihum aus den Passanten. Wer (noch) keine passende
+  // Vorlage hat, behaelt die gebaute Figur.
+  var FESTE_ROLLEN = ['lynn', 'lagerist', 'leiterin'];
+
   function zieheUm(person) {
     if (!figurVorlagen.length || person.modell) return;
     var vorlage = null;
-    if (person.rolle === 'lynn') {
-      vorlage = figurVorlagen.filter(function (v) { return v.rolle === 'lynn'; })[0] || null;
+    if (FESTE_ROLLEN.indexOf(person.rolle) >= 0) {
+      vorlage = figurVorlagen.filter(function (v) { return v.rolle === person.rolle; })[0] || null;
+      if (!vorlage && person.rolle === 'lynn') return;
     }
     if (!vorlage) {
-      var pool = figurVorlagen.filter(function (v) { return v.rolle !== 'lynn'; });
-      if (!pool.length) pool = figurVorlagen;
+      var pool = figurVorlagen.filter(function (v) { return FESTE_ROLLEN.indexOf(v.rolle) < 0; });
+      if (!pool.length) return;
       vorlage = pool[figurIndex++ % pool.length];
     }
+    // Passt die Bewegung gar nicht zum Skelett, bleibt die gebaute Figur.
+    if (!bewegungen[vorlage.gang] || clipFuer(vorlage, vorlage.gang).tracks.length < 20) return;
     var modell = THREE.SkeletonUtils.clone(vorlage.szene);
     modell.traverse(function (o) {
       if (!o.isMesh) return;
-      o.castShadow = true;
+      o.castShadow = person.rolle === 'lynn';
       o.receiveShadow = true;
-      // Die Huelle einer Skin-Figur stammt aus der Ruhepose; beim Gehen
-      // ragen Arme und Beine darueber hinaus und wuerden weggeschnitten.
-      o.frustumCulled = false;
+    });
+    // Die Huelle einer Skin-Figur stammt aus der Ruhepose - beim Gehen ragen
+    // Arme und Beine darueber hinaus und wuerden weggeschnitten. Ganz
+    // abzuschalten kostete auf der Strasse aber echt: mit acht Passanten
+    // ausserhalb des Bildes blieben 650000 Dreiecke jedes Bild in Arbeit.
+    // Eine feste, grosszuegige Kugel um die Huefte laesst die Kulisse wieder
+    // greifen, ohne dass eine Hand beim Ausholen verschwindet.
+    var kugel = new THREE.Sphere(new THREE.Vector3(0, 1.0, 0), 1.15);
+    modell.traverse(function (o) {
+      if (o.isSkinnedMesh) o.geometry.boundingSphere = kugel;
     });
     person.root.add(modell);
     person.hips.visible = false;
     var mixer = new THREE.AnimationMixer(modell);
-    var gehen = mixer.clipAction(clipFuer(vorlage, 'gehen'));
+    var gehen = mixer.clipAction(clipFuer(vorlage, vorlage.gang));
     var stehen = mixer.clipAction(clipFuer(vorlage, 'stehen'));
     gehen.play();
     stehen.play();
@@ -3024,7 +3047,23 @@
     stehen.time = Math.random() * stehen.getClip().duration;
     gehen.setEffectiveWeight(person.blend);
     stehen.setEffectiveWeight(1 - person.blend);
-    person.modell = { obj: modell, mixer: mixer, gehen: gehen, stehen: stehen, name: vorlage.name };
+    // Laengere Beine machen bei derselben Bewegung laengere Schritte. Das
+    // Aufnahmetempo gilt fuer die Figur, mit der die Bewegung aufgenommen
+    // wurde; fuer jede andere waechst es mit ihrer Hueft-, also Beinhoehe.
+    // Gemessen wird in Metern, nicht in den inneren Einheiten der Figur: Remy
+    // ist in einem anderen Massstab gebaut, seine Huefte steht innen bei 209
+    // statt 94 - in Metern ist sie gleich hoch wie bei den anderen.
+    var b = bewegungen[vorlage.gang];
+    if (vorlage.hueftMeter === undefined) {
+      var h = vorlage.szene.getObjectByName('mixamorigHips');
+      var hp = new THREE.Vector3();
+      vorlage.szene.updateMatrixWorld(true);
+      if (h) h.getWorldPosition(hp);
+      vorlage.hueftMeter = h ? hp.y : 0;
+    }
+    var bein = (vorlage.hueftMeter && b.hueftRuhe) ? vorlage.hueftMeter / (b.hueftRuhe * 0.01) : 1;
+    person.modell = { obj: modell, mixer: mixer, gehen: gehen, stehen: stehen, name: vorlage.name,
+                      tempo: (b.tempo || 1.4) * bein };
   }
 
   function stepModell(person, a, dt) {
@@ -3034,7 +3073,7 @@
     // Die Bewegung laeuft genau so schnell, wie die Figur gerade geht: das
     // Aufnahmetempo steht in gehen.json, gemessen am Standfuss. Dann bleibt
     // der Fuss am Boden stehen, statt zu rutschen.
-    if (person.speed > 0.02) m.gehen.timeScale = person.speed / bewegungen.gehen.tempo;
+    if (person.speed > 0.02) m.gehen.timeScale = person.speed / m.tempo;
     m.mixer.update(dt);
   }
 
@@ -3051,21 +3090,42 @@
         gltf.load(url, function (g) { ok(g.scene); }, undefined, fehler);
       });
     }
+    function vorlage(f, szene) {
+      return { name: f.name, rolle: f.rolle, gang: f.gang || 'gehen', szene: szene,
+               hueftRuhe: f.hueftRuhe, clips: {} };
+    }
     json(FIGUREN_ORDNER + '/figuren.json').then(function (liste) {
-      return Promise.all([
-        json(FIGUREN_ORDNER + '/' + liste.gehen),
-        json(FIGUREN_ORDNER + '/' + liste.stehen)
-      ].concat(liste.figuren.map(function (f) {
-        return glb(FIGUREN_ORDNER + '/' + f.name + '.glb');
-      }))).then(function (r) {
-        bewegungen.gehen = { clip: THREE.AnimationClip.parse(r[0]), tempo: r[0].tempo || 1.4, hueftRuhe: r[0].hueftRuhe };
-        bewegungen.stehen = { clip: THREE.AnimationClip.parse(r[1]), tempo: 1, hueftRuhe: r[1].hueftRuhe };
-        liste.figuren.forEach(function (f, i) {
-          figurVorlagen.push({ name: f.name, rolle: f.rolle, szene: r[i + 2], hueftRuhe: f.hueftRuhe, clips: {} });
+      var dateien = liste.bewegungen || { gehen: liste.gehen, stehen: liste.stehen };
+      var namen = Object.keys(dateien);
+      return Promise.all(namen.map(function (k) {
+        return json(FIGUREN_ORDNER + '/' + dateien[k]);
+      })).then(function (r) {
+        namen.forEach(function (k, i) {
+          bewegungen[k] = { clip: THREE.AnimationClip.parse(r[i]), tempo: r[i].tempo || 1.4, hueftRuhe: r[i].hueftRuhe };
         });
-        figurenBereit = true;
-        allePersonen.forEach(zieheUm);
         window.__inspect.figuren = { vorlagen: figurVorlagen, bewegungen: bewegungen };
+        // Lynn zuerst - sie steht im Bild, sobald das Spiel startet. Die
+        // Passanten kommen danach alle gemeinsam, sonst saehen anfangs alle
+        // gleich aus.
+        var lynnF = liste.figuren.filter(function (f) { return f.rolle === 'lynn'; });
+        var rest = liste.figuren.filter(function (f) { return f.rolle !== 'lynn'; });
+        return Promise.all(lynnF.map(function (f) {
+          return glb(FIGUREN_ORDNER + '/' + f.name + '.glb').then(function (szene) {
+            figurVorlagen.push(vorlage(f, szene));
+            figurenBereit = true;
+            zieheUm(lynn);
+          });
+        })).then(function () {
+          return Promise.all(rest.map(function (f) {
+            return glb(FIGUREN_ORDNER + '/' + f.name + '.glb').then(function (szene) {
+              return vorlage(f, szene);
+            });
+          }));
+        }).then(function (vorlagen) {
+          vorlagen.forEach(function (v) { figurVorlagen.push(v); });
+          figurenBereit = true;
+          allePersonen.forEach(zieheUm);
+        });
       });
     }).catch(function (e) {
       console.warn('Figuren nicht geladen, die gebauten bleiben: ' + e.message);
@@ -3918,7 +3978,7 @@
       kassiererin = buildPerson({
         skin: '#d8a97f', top: '#5d6f8a', legs: '#3a3e45',
         inner: '#efe7d6', hair: '#4a3222', shoes: '#4e372a',
-        bun: true, speed: 1.4, stride: 1.28
+        bun: true, speed: 1.4, stride: 1.28, rolle: 'kasse'
       });
       kassiererin.pos.set(-1.9, 0.5);
       kassiererin.heading = Math.PI;
@@ -3931,7 +3991,7 @@
       lagerist = buildPerson({
         skin: '#c98d63', top: '#7a6a4a', legs: '#4a4a4a',
         hair: '#2f2a24', shoes: '#3f342a',
-        bun: false, speed: 1.55, stride: 1.28
+        bun: false, speed: 1.55, stride: 1.28, rolle: 'lagerist'
       });
       lagerist.pos.set(-3.4, -3.2);
       lagerist.root.position.set(-3.4, 0, -3.2);
@@ -3943,7 +4003,7 @@
       leiterin = buildPerson({
         skin: '#e0b28d', top: '#4a4f6b', legs: '#2f3138',
         inner: '#efe7d6', hair: '#5a3a24', shoes: '#3f342a',
-        bun: true, speed: 1.5, stride: 1.28
+        bun: true, speed: 1.5, stride: 1.28, rolle: 'leiterin'
       });
       leiterin.pos.set(-1.1, 1.4);
       leiterin.heading = Math.PI;

@@ -1,0 +1,74 @@
+{
+ "figuren": [
+  {
+   "name": "jody",
+   "rolle": "lynn",
+   "hoehe": 1.719,
+   "hueftRuhe": 93.82806396484375,
+   "gang": "gehen-frau"
+  },
+  {
+   "name": "kate",
+   "rolle": "passant",
+   "hoehe": 1.741,
+   "hueftRuhe": 95.22978973388672,
+   "gang": "gehen-frau"
+  },
+  {
+   "name": "megan",
+   "rolle": "passant",
+   "hoehe": 1.734,
+   "hueftRuhe": 100.08073425292969,
+   "gang": "gehen-frau"
+  },
+  {
+   "name": "elizabeth",
+   "rolle": "passant",
+   "hoehe": 1.774,
+   "hueftRuhe": 99.96843719482422,
+   "gang": "gehen-frau"
+  },
+  {
+   "name": "martha",
+   "rolle": "leiterin",
+   "hoehe": 1.747,
+   "hueftRuhe": 97.75883483886719,
+   "gang": "gehen-frau"
+  },
+  {
+   "name": "remy",
+   "rolle": "passant",
+   "hoehe": 1.74,
+   "hueftRuhe": 209.15078735351562,
+   "gang": "gehen-mann"
+  },
+  {
+   "name": "brian",
+   "rolle": "passant",
+   "hoehe": 1.735,
+   "hueftRuhe": 99.16305541992188,
+   "gang": "gehen-mann"
+  },
+  {
+   "name": "lewis",
+   "rolle": "passant",
+   "hoehe": 1.739,
+   "hueftRuhe": 97.6536636352539,
+   "gang": "gehen-mann"
+  },
+  {
+   "name": "pete",
+   "rolle": "lagerist",
+   "hoehe": 1.758,
+   "hueftRuhe": 94.75102233886719,
+   "gang": "gehen-mann"
+  }
+ ],
+ "bewegungen": {
+  "gehen-frau": "gehen-frau.json",
+  "gehen-mann": "gehen-mann.json",
+  "stehen": "stehen.json"
+ },
+ "gehen": "gehen-frau.json",
+ "stehen": "stehen.json"
+}
