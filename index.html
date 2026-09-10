@@ -474,7 +474,7 @@
        und eine alte Fassung als "immer noch kaputt" durchging. Bei jeder
        Aenderung hochzaehlen. -->
   <div class="mark">
-    <b>Fleur-Blache’s Blumen</b><span>TESTVERSION &middot; V47</span>
+    <b>Fleur-Blache’s Blumen</b><span>TESTVERSION &middot; V48</span>
     <em id="premiumBadge" class="premium-badge" hidden>👑 Premium</em>
   </div>
   <div class="hud-right">
@@ -1680,6 +1680,7 @@
   // Sofort laden, nicht erst wenn die erste Pflanze gestellt wird: der Shop
   // fotografiert seine Katalogbilder in dem Moment, in dem die Liste aufgeht.
   PLANT_MODELS.forEach(loadModel);
+  loadModel('coatRackStanding');   // fuer die Deko weiter unten vorgeladen
 
   function modelForSpecies(species) {
     var sum = 0;
@@ -2128,6 +2129,11 @@
       var foot = new THREE.Mesh(new THREE.BoxGeometry(0.13, 0.05, 0.13), frameWood);
       foot.position.set(p[0], 0.025, p[1]);
       unit.add(foot);
+      // Ein Wuerfelchen als Pfostenkopf - vorher endete der Pfosten einfach in
+      // der Luft, jetzt liest es sich wie gezimmert statt wie ein Geruest.
+      var cap = new THREE.Mesh(new THREE.BoxGeometry(0.11, 0.03, 0.11), darkMat);
+      cap.position.set(p[0], H + 0.015, p[1]);
+      unit.add(cap);
     });
 
     // cross braces at the back turn four posts into a piece of furniture
@@ -2139,6 +2145,24 @@
     var spine = new THREE.Mesh(new THREE.BoxGeometry(0.05, H - 0.5, 0.04), frameWood);
     spine.position.set(0, H / 2, -D / 2 + 0.04);
     unit.add(spine);
+
+    // Sockelblende vorne - ohne sie standen die vier Pfosten frei in der Luft
+    // ueber dem Boden, mit ihr liest sich das Regal als ein Moebel, das auf
+    // dem Boden steht, nicht als Geruest darueber.
+    var sockel = new THREE.Mesh(new THREE.BoxGeometry(W - 0.06, 0.1, 0.03), darkMat);
+    sockel.position.set(0, 0.05, D / 2 - 0.015);
+    unit.add(sockel);
+
+    // Winkel unter dem obersten Brett an allen vier Ecken - ein Detail, das
+    // ein Regal von einem simplen Baukasten unterscheidet.
+    var winkelGeo = new THREE.BoxGeometry(0.09, 0.02, 0.09);
+    [[-W / 2 + 0.07, -D / 2 + 0.06], [W / 2 - 0.07, -D / 2 + 0.06],
+     [-W / 2 + 0.07, D / 2 - 0.06], [W / 2 - 0.07, D / 2 - 0.06]].forEach(function (p) {
+      var winkel = new THREE.Mesh(winkelGeo, darkMat);
+      winkel.rotation.y = Math.PI / 4;
+      winkel.position.set(p[0], boards[boards.length - 1] - 0.02, p[1]);
+      unit.add(winkel);
+    });
 
     var slots = [];
     boards.forEach(function (y, tier) {
@@ -4814,6 +4838,28 @@
     }
   }
 
+  // Ein Spiegel als echte Geometrie statt einer gemalten Tafel - aus dem
+  // Winkel gesehen bleibt so wenigstens der Rahmen ein Rahmen, nicht ein
+  // Bild von einem. ovalX staucht/streckt Ring und Glas in der Breite.
+  function spiegelGruppe(radius, tube, rahmenFarbe, glasFarbe, ovalX, doppelring) {
+    var group = new THREE.Group();
+    var ring = new THREE.Mesh(new THREE.TorusGeometry(radius, tube, 10, 28),
+      new THREE.MeshStandardMaterial({ color: rahmenFarbe, roughness: 0.55, metalness: doppelring ? 0.3 : 0 }));
+    ring.scale.x = ovalX;
+    group.add(ring);
+    if (doppelring) {
+      var innen = new THREE.Mesh(new THREE.TorusGeometry(radius * 0.8, tube * 0.5, 8, 24),
+        ring.material);
+      group.add(innen);
+    }
+    var glass = new THREE.Mesh(new THREE.CircleGeometry(radius * 0.94, 28),
+      new THREE.MeshStandardMaterial({ color: glasFarbe, roughness: 0.15, metalness: 0.6 }));
+    glass.scale.x = ovalX;
+    glass.position.z = 0.01;
+    group.add(glass);
+    return group;
+  }
+
   var DECOR = [
     {
       id: 'rug', name: 'Runder Teppich', cost: 18, cat: 'rugs',
@@ -4946,6 +4992,59 @@
       },
       place: function () {
         wallCard('spiegel', -1.9, 2.15, -ROOM_D / 2 + 0.07, 0, 0.88);
+      }
+    },
+    {
+      id: 'mirror2', name: 'Ovaler Spiegel', cost: 30, cat: 'wall',
+      note: 'Schlanker ovaler Rahmen in hellem Holz.',
+      preview: function () { return spiegelGruppe(0.30, 0.045, '#d8c39a', '#dde8e3', 1.3); },
+      place: function () {
+        var g = spiegelGruppe(0.30, 0.045, '#d8c39a', '#dde8e3', 1.3);
+        g.position.set(ROOM_W / 2 - 0.06, 2.1, 2.0);
+        g.rotation.y = -Math.PI / 2;
+        scene.add(g);
+      }
+    },
+    {
+      id: 'mirror3', name: 'Goldener Spiegel', cost: 36, cat: 'wall',
+      note: 'Runder Rahmen mit einem zweiten, feinen Goldring.',
+      preview: function () { return spiegelGruppe(0.32, 0.035, '#c9a24a', '#cfdbd6', 1, true); },
+      place: function () {
+        var g = spiegelGruppe(0.32, 0.035, '#c9a24a', '#cfdbd6', 1, true);
+        g.position.set(3.6, 2.1, -ROOM_D / 2 + 0.06);
+        scene.add(g);
+      }
+    },
+    {
+      id: 'coatrack', name: 'Garderobenständer', cost: 26, cat: 'floor',
+      note: 'Für die Jacken der Kundschaft, gleich neben der Tür.',
+      preview: function () {
+        var proto = modelReady['coatRackStanding'];
+        if (proto) return fitModel(proto.clone(true), 1.7, 'height');
+        var group = new THREE.Group();
+        var pole = new THREE.Mesh(new THREE.CylinderGeometry(0.025, 0.032, 1.65, 8), frameWood);
+        pole.position.y = 0.825;
+        group.add(pole);
+        var fussGeo = new THREE.CylinderGeometry(0.19, 0.19, 0.03, 12);
+        var fuss = new THREE.Mesh(fussGeo, frameWood);
+        fuss.position.y = 0.015;
+        group.add(fuss);
+        for (var i = 0; i < 5; i++) {
+          var haken = new THREE.Mesh(new THREE.SphereGeometry(0.035, 8, 6), darkMat);
+          var winkel = i * (Math.PI * 2 / 5);
+          haken.position.set(Math.cos(winkel) * 0.09, 1.55, Math.sin(winkel) * 0.09);
+          group.add(haken);
+        }
+        return group;
+      },
+      place: function () {
+        loadModel('coatRackStanding').then(function (proto) {
+          if (!proto) return;
+          var stand = fitModel(proto.clone(true), 1.7, 'height');
+          stand.position.x += 3.0;
+          stand.position.z += 4.0;
+          scene.add(stand);
+        });
       }
     },
     {
@@ -5353,7 +5452,18 @@
     { id: 'muster-zement', name: 'Zementfliesen', cost: 34, x: 3.6, y: 3 }
   ];
 
-  var gewaehlt = { holz: 'kiefer', wand: 'creme', boden: 'floor' };
+  // Derselbe gewebte Streifenteppich, nur neu eingefaerbt - gebaut von
+  // build-rugs.py mit demselben Trick wie die Holz- und Wandfarben.
+  var TEPPICH_FARBEN = [
+    { id: 'gruen', name: 'Waldgrün', cost: 0 },
+    { id: 'rost', name: 'Rost', cost: 16 },
+    { id: 'blau', name: 'Blau', cost: 16 },
+    { id: 'beere', name: 'Beere', cost: 18 },
+    { id: 'sonnig', name: 'Sonnig', cost: 16 },
+    { id: 'anthrazit', name: 'Anthrazit', cost: 18 }
+  ];
+
+  var gewaehlt = { holz: 'kiefer', wand: 'creme', boden: 'floor', teppich: 'gruen' };
 
   function setzeHolz(id) {
     gewaehlt.holz = id;
@@ -5370,6 +5480,11 @@
     if (!b) return;
     gewaehlt.boden = id;
     setSurface(floor.material, id, b.x, b.y);
+  }
+
+  function setzeTeppich(id) {
+    gewaehlt.teppich = id;
+    setSurface(rug.material, id === 'gruen' ? 'gen-rug' : 'gen-rug-' + id, 1.6, 1.6);
   }
 
   // Nicht mehr alle Arten von Anfang an. Das Grundsortiment liegt im Laden,
@@ -5838,7 +5953,8 @@
       list.appendChild(chipRow(
         [{ id: 'wood', name: 'Regale & Möbel' },
          { id: 'wall', name: 'Wände' },
-         { id: 'floor', name: 'Boden' }],
+         { id: 'floor', name: 'Boden' },
+         { id: 'teppich', name: 'Teppiche' }],
         paintGroup, function (id) { paintGroup = id; renderShop(); }));
 
       if (paintGroup === 'wood') {
@@ -5850,6 +5966,11 @@
         WAND_FARBEN.forEach(function (e) {
           list.appendChild(farbZeile('wand', e, gewaehlt.wand === e.id,
             'wand-' + e.id, setzeWand));
+        });
+      } else if (paintGroup === 'teppich') {
+        TEPPICH_FARBEN.forEach(function (e) {
+          list.appendChild(farbZeile('teppich', e, gewaehlt.teppich === e.id,
+            e.id === 'gruen' ? 'gen-rug' : 'gen-rug-' + e.id, setzeTeppich));
         });
       } else {
         BODEN_BELAEGE.forEach(function (e) {
@@ -5999,7 +6120,8 @@
         { id: 'rugs', name: 'Teppiche' },
         { id: 'wall', name: 'Wand' },
         { id: 'light', name: 'Licht' },
-        { id: 'plants', name: 'Pflanzendeko' }
+        { id: 'plants', name: 'Pflanzendeko' },
+        { id: 'floor', name: 'Extras' }
       ];
       list.appendChild(chipRow(DECOR_GROUPS, decorGroup, function (id) { decorGroup = id; renderShop(); }));
       DECOR.filter(function (item) { return item.cat === decorGroup; }).forEach(function (item) {
