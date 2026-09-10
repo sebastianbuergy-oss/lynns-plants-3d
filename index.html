@@ -456,7 +456,7 @@
   <!-- Die Versionsnummer steht sichtbar da, weil Safari die Seite gecacht hat
        und eine alte Fassung als "immer noch kaputt" durchging. Bei jeder
        Aenderung hochzaehlen. -->
-  <div class="mark"><b>Lynn's Plants</b><span>3D PROTOTYP &middot; V37</span></div>
+  <div class="mark"><b>Lynn's Plants</b><span>3D PROTOTYP &middot; V38</span></div>
   <div class="hud-right">
     <div class="level" id="levelBox"><b id="levelValue">LV 1</b><i><em id="levelFill"></em></i></div>
     <button class="coins" id="coinBtn" type="button"><i></i><b id="coinValue">1000</b><em>+</em></button>
@@ -1347,7 +1347,7 @@
       brett.castShadow = true;
       aufsteller.add(brett);
     });
-    aufsteller.position.set(TUER_VORNE.x1 + 1.0, 0, ROOM_D / 2 + 1.0);
+    aufsteller.position.set(TUER_VORNE.x1 + 1.0, -0.025, ROOM_D / 2 + 0.7);
     aufsteller.rotation.y = -0.35;
     scene.add(aufsteller);
     // contactBlob gibt es an dieser Stelle noch nicht - eigener Fleck
@@ -2708,6 +2708,35 @@
   // die beiden nicht ueberein, rutschen die Fuesse.
   var STEP_SIN = Math.sin(0.4);
 
+  // Eine Figur bestand aus rund 35 einzelnen Teilen, jedes ein eigener
+  // Zeichenaufruf. Mit acht Passanten auf der Strasse waeren das dreihundert
+  // mehr pro Bild. Alles, was am selben Gelenk haengt, bewegt sich ohnehin
+  // gemeinsam - also wird es zu einem Teil verschmolzen, die Farbe wandert in
+  // die Eckpunkte. Uebrig bleiben 13 Teile, die Figur sieht gleich aus.
+  var personMat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.8 });
+
+  function verschmelzeGelenke(root, gelenke) {
+    root.updateMatrixWorld(true);
+    var sammlung = gelenke.map(function () { return []; });
+    var weg = [];
+    root.traverse(function (o) {
+      if (!o.isMesh || o.userData.keep) return;
+      var a = o.parent;
+      while (a && gelenke.indexOf(a) < 0) a = a.parent;
+      if (!a) return;
+      var rel = new THREE.Matrix4().copy(a.matrixWorld).invert().multiply(o.matrixWorld);
+      sammlung[gelenke.indexOf(a)].push({ geo: o.geometry, matrix: rel, farbe: o.material.color });
+      weg.push(o);
+    });
+    weg.forEach(function (o) { o.parent.remove(o); });
+    gelenke.forEach(function (g, i) {
+      if (!sammlung[i].length) return;
+      var teil = new THREE.Mesh(verschmelze(sammlung[i]), personMat);
+      teil.castShadow = teil.receiveShadow = true;
+      g.add(teil);
+    });
+  }
+
   function buildPerson(look) {
     var skin = new THREE.MeshStandardMaterial({ color: look.skin, roughness: 0.78 });
     var top = new THREE.MeshStandardMaterial({ color: look.top, roughness: 0.82 });
@@ -2909,7 +2938,10 @@
       legs.push({ hip: hip, knee: knee, ankle: ankle, side: side });
     });
 
-    markShadow(root);
+    var gelenke = [hips, torso, head];
+    arms.forEach(function (a) { gelenke.push(a.shoulder, a.elbow); });
+    legs.forEach(function (l) { gelenke.push(l.hip, l.knee, l.ankle); });
+    verschmelzeGelenke(root, gelenke);
     scene.add(root);
 
     return {
@@ -3076,6 +3108,18 @@
     person.route = [dahinter, ziel];
   }
 
+  // Hoehe des Bodens, auf dem eine Figur steht. Ohne das gingen Passanten
+  // auf dem Zebrastreifen 14 cm ueber dem Asphalt.
+  function bodenHoehe(x, z) {
+    if (z > ROOM_D / 2) {
+      return (z > STRASSE.bord && z < STRASSE.gegen) ? -0.14 : -0.025;
+    }
+    if (imGarten(z)) {
+      return (outdoor && z > TERRASSE.z1 && Math.abs(x) < ROOM_W / 2) ? 0.049 : -0.04;
+    }
+    return 0;
+  }
+
   function halt(person) {
     person.target = null;
     person.route = null;
@@ -3144,7 +3188,7 @@
     var wanting = Math.min(1, person.speed / (person.maxSpeed * 0.55));
     person.blend += (wanting - person.blend) * Math.min(1, dt * 9);
 
-    person.root.position.set(person.pos.x, 0, person.pos.y);
+    person.root.position.set(person.pos.x, bodenHoehe(person.pos.x, person.pos.y), person.pos.y);
     person.root.rotation.y = person.heading;
 
     var a = person.blend;
@@ -3336,47 +3380,389 @@
     pa.shadow.position.set(person.pos.x, 0.014, person.pos.y);
   }
 
-  // guest wanders between a few browsing spots
+  // ------------------------------------------------------------ Strassenleben
+  // Passanten laufen auf beiden Gehwegen. Wer an der Ladentuer vorbeikommt,
+  // geht manchmal hinein, stoebert an zwei bis vier Stellen, kauft vielleicht
+  // etwas und geht wieder hinaus - so kommen die Kunden jetzt in den Laden.
+  // Am Strassenende, tief im Dunst, fangen sie am anderen Ende neu an. Ab und
+  // zu geht jemand ueber den Zebrastreifen; dann halten die Autos.
   var guestSpots = [
     { x: -2.2, z: -2.4 }, { x: 1.5, z: -2.3 }, { x: 1.2, z: 1.9 },
     { x: -2.6, z: 1.4 }, { x: 3.4, z: 3.2 }
   ];
-  var guestIndex = 0;
-  var guestWait = 1.5;
-
-  var guestWalking = false;
   var guestScratch = new THREE.Vector3();
+  var STRASSE_ENDE = 58;
+  var MAX_KUNDEN = 3;
+  var passanten = [];
 
-  function guestBrowse() {
+  function bahnFuer(seite, richtung) {
+    var z0 = seite > 0 ? ROOM_D / 2 + 1.3 : STRASSE.gegen + 1.2;
+    return z0 + (richtung > 0 ? 0 : 1.1) + Math.random() * 0.7;
+  }
+
+  function weiterGehen(p) {
+    p.zustand = 'gehen';
+    p.target = new THREE.Vector2(p.pos.x + p.richtung * 1.2, p.bahn);
+    p.route = [new THREE.Vector2(p.richtung * STRASSE_ENDE, p.bahn)];
+  }
+
+  var PASSANT_LOOKS = [
+    { skin: '#f0c8a8', top: '#b5533c', legs: '#39414d', hair: '#3a2a20', shoes: '#2d2a28', bun: false },
+    { skin: '#8d5a3c', top: '#e8d9b0', legs: '#6b5a44', hair: '#1c1512', shoes: '#efe7d8', bun: true },
+    { skin: '#d9a47e', top: '#5f7f9e', legs: '#2f3138', hair: '#8a5a33', shoes: '#4e372a', bun: false },
+    { skin: '#e8b996', top: '#7c8f5a', legs: '#c9b99a', hair: '#c79a58', shoes: '#6b4a32', bun: true },
+    { skin: '#6f4630', top: '#2f3f5e', legs: '#4a4a4a', hair: '#141110', shoes: '#2b2b2b', bun: false },
+    { skin: '#f2cfb2', top: '#d9a3a8', legs: '#3d4a63', hair: '#5b3a26', shoes: '#efe7d8', bun: true },
+    { skin: '#c68b62', top: '#4f6b58', legs: '#5a4636', hair: '#2a1d16', shoes: '#3f342a', bun: false, inner: '#efe7d6' },
+    { skin: '#e3b28f', top: '#e2c26a', legs: '#35393f', hair: '#6b4028', shoes: '#4e372a', bun: true }
+  ];
+
+  function neuerPassant(look, seite, x, richtung) {
+    look.speed = 1.15 + Math.random() * 0.35;
+    look.stride = 1.28;
+    var p = buildPerson(look);
+    contactBlob(p.root, 0.58);
+    p.seite = seite;
+    p.richtung = richtung;
+    p.bahn = bahnFuer(seite, richtung);
+    p.pos.set(x, p.bahn);
+    p.heading = richtung > 0 ? Math.PI / 2 : -Math.PI / 2;
+    p.root.position.set(x, 0, p.bahn);
+    p.target = new THREE.Vector2(richtung * STRASSE_ENDE, p.bahn);
+    p.zustand = 'gehen';
+    p.lust = seite > 0 && Math.random() < 0.65;
+    p.querLust = Math.random() < 0.3;
+    passanten.push(p);
+    return p;
+  }
+
+  // Die Kundin, die frueher allein im Laden kreiste, ist jetzt die erste von
+  // vielen: sie stoebert noch ein wenig und geht dann auf die Strasse hinaus.
+  guest.seite = 1;
+  guest.richtung = 1;
+  guest.bahn = bahnFuer(1, 1);
+  guest.zustand = 'stoebern';
+  guest.runden = 3;
+  guest.warten = 1.5;
+  guest.lust = false;
+  guest.querLust = false;
+  passanten.push(guest);
+
+  [[1, -30, 1], [1, -8, 1], [1, 22, -1], [1, 44, -1], [1, 6, -1],
+   [-1, -40, 1], [-1, 14, -1], [-1, 36, 1]].forEach(function (a, i) {
+    neuerPassant(PASSANT_LOOKS[i % PASSANT_LOOKS.length], a[0], a[1], a[2]);
+  });
+
+  function kundenImLaden() {
+    var zahl = 0;
+    for (var i = 0; i < passanten.length; i++) {
+      var z = passanten[i].zustand;
+      if (z === 'rein' || z === 'stoebern' || z === 'raus') zahl++;
+    }
+    return zahl;
+  }
+
+  // Am liebsten vor ein Regal, auf dem etwas steht - dann kann auch gekauft
+  // werden. Sonst an einen der festen Plaetze.
+  function stoeberPlatz() {
+    var lebend = [];
+    for (var i = 0; i < sellables.length; i++) {
+      var pl = sellables[i];
+      if (pl.parent && !pl.userData.pick.dead && pl.userData.pick.shelf) lebend.push(pl);
+    }
+    if (lebend.length && Math.random() < 0.8) {
+      var regal = lebend[Math.floor(Math.random() * lebend.length)].userData.pick.shelf;
+      regal.hit.getWorldPosition(guestScratch);
+      var vor = new THREE.Vector3(0, 0, 1).applyAxisAngle(new THREE.Vector3(0, 1, 0), regal.group.rotation.y);
+      return { x: guestScratch.x + vor.x * 1.2, z: guestScratch.z + vor.z * 1.2 };
+    }
+    return guestSpots[Math.floor(Math.random() * guestSpots.length)];
+  }
+
+  function stoebern(p) {
     var best = null;
     var bestDist = 2.1;
     for (var i = 0; i < sellables.length; i++) {
       var plant = sellables[i];
       if (!plant.parent || plant.userData.pick.dead) continue;
       plant.getWorldPosition(guestScratch);
-      var d = Math.hypot(guestScratch.x - guest.pos.x, guestScratch.z - guest.pos.y);
+      var d = Math.hypot(guestScratch.x - p.pos.x, guestScratch.z - p.pos.y);
       if (d < bestDist) { bestDist = d; best = plant; }
     }
     if (best && Math.random() < 0.7) sellToGuest(best);
   }
 
-  function stepGuest(dt) {
-    if (!guest.target) {
-      if (guestWalking) {
-        guestWalking = false;
-        guestBrowse();
+  function autoAufZebra() {
+    for (var i = 0; i < autos.length; i++) {
+      if (Math.abs(autos[i].x - STRASSE.zebra) < 3.4) return true;
+    }
+    return false;
+  }
+
+  function stepPassant(p, dt) {
+    if (p.zustand === 'gehen') {
+      if (p.seite > 0 && p.lust && Math.abs(p.pos.x - TUER_V_X) < 0.45 &&
+          kundenImLaden() < MAX_KUNDEN) {
+        // Hinein: vor die Tuer, durch, dann zum ersten Regal
+        p.lust = false;
+        p.zustand = 'rein';
+        p.target = new THREE.Vector2(TUER_V_X, ROOM_D / 2 + 0.7);
+        p.route = [new THREE.Vector2(TUER_V_X, ROOM_D / 2 - 0.9)];
+        p.runden = 2 + Math.floor(Math.random() * 3);
+        p.warten = 0.6;
+      } else if (p.querLust && Math.abs(p.pos.x - STRASSE.zebra) < 0.45) {
+        p.querLust = false;
+        p.zustand = 'queren';
+        p.randZ = p.seite > 0 ? STRASSE.bord - 0.35 : STRASSE.gegen + 0.35;
+        p.zielZ = p.seite > 0 ? STRASSE.gegen + 0.35 : STRASSE.bord - 0.35;
+        p.target = new THREE.Vector2(STRASSE.zebra, p.randZ);
+        p.route = null;
+        p.amRand = false;
+      } else if (!p.target) {
+        // Strassenende: am anderen Ende neu anfangen, das Wenden sieht keiner
+        p.bahn = bahnFuer(p.seite, p.richtung);
+        p.pos.set(-p.richtung * STRASSE_ENDE, p.bahn);
+        p.target = new THREE.Vector2(p.richtung * STRASSE_ENDE, p.bahn);
+        p.lust = p.seite > 0 && Math.random() < 0.65;
+        p.querLust = Math.random() < 0.3;
       }
-      guestWait -= dt;
-      if (guestWait <= 0) {
-        guestIndex = (guestIndex + 1) % guestSpots.length;
-        var spot = guestSpots[guestIndex];
-        walkTo(guest, spot.x, spot.z);
-        guestWalking = true;
-        guestWait = 2.4 + Math.random() * 2.6;
+    } else if (p.zustand === 'queren') {
+      if (!p.target && !p.amRand) {
+        p.amRand = true;
+      }
+      if (p.amRand && !p.target && !p.unterwegs) {
+        // Warten, bis kein Auto mehr auf dem Streifen ist - die naechsten
+        // halten ja schon an.
+        if (!autoAufZebra()) {
+          p.unterwegs = true;
+          p.target = new THREE.Vector2(STRASSE.zebra, p.zielZ);
+        }
+      } else if (p.unterwegs && !p.target) {
+        p.unterwegs = false;
+        p.seite = -p.seite;
+        p.bahn = bahnFuer(p.seite, p.richtung);
+        p.lust = p.seite > 0 && Math.random() < 0.65;
+        weiterGehen(p);
+      }
+    } else if (p.zustand === 'rein') {
+      if (!p.target) p.zustand = 'stoebern';
+    } else if (p.zustand === 'stoebern') {
+      if (!p.target) {
+        if (p.laufend) {
+          p.laufend = false;
+          stoebern(p);
+          p.runden--;
+          p.warten = 2.2 + Math.random() * 2.8;
+        }
+        p.warten -= dt;
+        if (p.warten <= 0) {
+          if (p.runden <= 0) {
+            p.zustand = 'raus';
+            walkTo(p, TUER_V_X, ROOM_D / 2 - 0.9);
+          } else {
+            var platz = stoeberPlatz();
+            walkTo(p, platz.x, platz.z);
+            p.laufend = true;
+          }
+        }
+      }
+    } else if (p.zustand === 'raus') {
+      if (!p.target) {
+        p.target = new THREE.Vector2(TUER_V_X, ROOM_D / 2 + 0.8);
+        p.route = [new THREE.Vector2(TUER_V_X + p.richtung * 1.2, p.bahn),
+                   new THREE.Vector2(p.richtung * STRASSE_ENDE, p.bahn)];
+        p.zustand = 'gehen';
+        p.lust = false;
       }
     }
-    stepPerson(guest, dt);
+    stepPerson(p, dt);
   }
+
+  // ------------------------------------------------------------------ Autos
+  // Kleine Stadtautos in Pastellfarben. Die Seitenansicht ist ein Profil, das
+  // zur Karosserie extrudiert wird; Fenster und Radkaesten sind auf die
+  // Seiten gemalt, Frontscheibe und Heckscheibe sitzen als eigene Scheiben auf
+  // den Schraegen. Die Raeder drehen sich passend zur Geschwindigkeit.
+  var autos = [];
+  var RAD_R = 0.32;
+  var AUTO_ENDE = 62;
+  var AUTO_FARBEN = ['#e7c46a', '#8fc3b2', '#d98b73', '#8fb1d6', '#efe6d2', '#b7d18a', '#c7a2c9'];
+
+  var autoProfil = new THREE.Shape();
+  [[-2.0, 0.3], [1.95, 0.3], [2.05, 0.42], [2.05, 0.6], [1.85, 0.8], [0.95, 0.88],
+   [0.35, 1.38], [-1.15, 1.38], [-1.75, 0.92], [-2.02, 0.86], [-2.05, 0.5]].forEach(function (p, i) {
+    if (i === 0) autoProfil.moveTo(p[0], p[1]); else autoProfil.lineTo(p[0], p[1]);
+  });
+  var autoGeo = new THREE.ExtrudeGeometry(autoProfil, {
+    depth: 1.64, bevelEnabled: true, bevelSize: 0.04, bevelThickness: 0.05, bevelSegments: 2
+  });
+  autoGeo.translate(0, 0, -0.82);
+
+  function autoSeite(farbe) {
+    var c = document.createElement('canvas');
+    c.width = 512; c.height = 192;
+    var g = c.getContext('2d');
+    function px(x) { return (x + 2.2) / 4.4 * 512; }
+    function py(y) { return (1 - y / 1.6) * 192; }
+    g.fillStyle = farbe;
+    g.fillRect(0, 0, 512, 192);
+    // Fenster mit einem hellen Streifen Himmel darin
+    g.fillStyle = '#46545c';
+    g.beginPath();
+    [[0.86, 0.9], [0.4, 1.3], [-1.08, 1.3], [-1.62, 0.93]].forEach(function (p, i) {
+      if (i === 0) g.moveTo(px(p[0]), py(p[1])); else g.lineTo(px(p[0]), py(p[1]));
+    });
+    g.closePath();
+    g.fill();
+    g.fillStyle = 'rgba(230,240,240,0.25)';
+    g.fillRect(px(-1.0), py(1.24), px(0.2) - px(-1.0), 7);
+    // B-Saeule
+    g.fillStyle = farbe;
+    g.fillRect(px(-0.34), py(1.32), 9, py(0.88) - py(1.32));
+    // Tuerfugen und Griff
+    g.strokeStyle = 'rgba(0,0,0,0.22)';
+    g.lineWidth = 2;
+    [0.72, -0.34, -1.3].forEach(function (x) {
+      g.beginPath(); g.moveTo(px(x), py(0.88)); g.lineTo(px(x), py(0.36)); g.stroke();
+    });
+    g.fillStyle = 'rgba(0,0,0,0.3)';
+    g.fillRect(px(0.35), py(0.78), 14, 4);
+    g.fillRect(px(-0.7), py(0.78), 14, 4);
+    // Radkaesten und dunkle Schwellerleiste
+    g.fillStyle = '#2b2a2a';
+    [1.3, -1.3].forEach(function (x) {
+      g.beginPath();
+      g.arc(px(x), py(0.32), (px(0.42) - px(0)), Math.PI, 0);
+      g.fill();
+    });
+    g.fillStyle = 'rgba(0,0,0,0.18)';
+    g.fillRect(0, py(0.4), 512, py(0.3) - py(0.4));
+    var t = new THREE.CanvasTexture(c);
+    t.encoding = THREE.sRGBEncoding;
+    t.repeat.set(1 / 4.4, 1 / 1.6);
+    t.offset.set(0.5, 0);
+    return t;
+  }
+
+  var felgeTex = (function () {
+    var c = document.createElement('canvas');
+    c.width = c.height = 64;
+    var g = c.getContext('2d');
+    g.fillStyle = '#2b2a2a';
+    g.fillRect(0, 0, 64, 64);
+    g.fillStyle = '#d8d4cc';
+    g.beginPath(); g.arc(32, 32, 19, 0, Math.PI * 2); g.fill();
+    g.strokeStyle = '#8f8a82';
+    g.lineWidth = 4;
+    for (var k = 0; k < 5; k++) {
+      var w = k / 5 * Math.PI * 2;
+      g.beginPath(); g.moveTo(32, 32); g.lineTo(32 + Math.cos(w) * 18, 32 + Math.sin(w) * 18); g.stroke();
+    }
+    var t = new THREE.CanvasTexture(c);
+    t.encoding = THREE.sRGBEncoding;
+    return t;
+  })();
+  var reifenMat = new THREE.MeshStandardMaterial({ color: '#2b2a2a', roughness: 0.9 });
+  var felgeMat = new THREE.MeshStandardMaterial({ map: felgeTex, roughness: 0.6 });
+  var radGeo = new THREE.CylinderGeometry(RAD_R, RAD_R, 0.22, 16);
+  radGeo.rotateX(Math.PI / 2);
+
+  function scheibe(teile, mitte, laenge, winkel, normale) {
+    var m = new THREE.Matrix4().makeRotationZ(winkel);
+    m.setPosition(mitte[0] + normale[0] * 0.06, mitte[1] + normale[1] * 0.06, 0);
+    teile.push({ geo: new THREE.BoxGeometry(laenge, 0.015, 1.5), matrix: m, farbe: '#3e4b52' });
+  }
+
+  function neuesAuto(farbe, richtung, x) {
+    var gruppe = new THREE.Group();
+    // Matt statt glaenzend: bei 0.45 spiegelte die Sonne auf Dach und Haube
+    // so stark, dass jedes Pastellauto oben weiss aussah.
+    var seiteMat = new THREE.MeshStandardMaterial({ map: autoSeite(farbe), roughness: 0.78 });
+    var lackMat = new THREE.MeshStandardMaterial({ color: farbe, roughness: 0.78 });
+    var koerper = new THREE.Mesh(autoGeo, [seiteMat, lackMat]);
+    gruppe.add(koerper);
+
+    var teile = [];
+    scheibe(teile, [0.65, 1.13], 0.78, -0.695, [0.64, 0.768]);
+    scheibe(teile, [-1.45, 1.15], 0.76, 0.655, [-0.608, 0.794]);
+    var klein = new THREE.BoxGeometry(0.04, 0.12, 0.3);
+    [-0.58, 0.58].forEach(function (z) {
+      teile.push({ geo: klein, matrix: lage(2.1, 0.62, z), farbe: '#fff4d6' });
+      teile.push({ geo: klein, matrix: lage(-2.1, 0.72, z), farbe: '#c8423a' });
+    });
+    gruppe.add(new THREE.Mesh(verschmelze(teile),
+      new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.2 })));
+
+    var raeder = [];
+    [[1.3, 0.8], [1.3, -0.8], [-1.3, 0.8], [-1.3, -0.8]].forEach(function (r) {
+      var rad = new THREE.Mesh(radGeo, [reifenMat, felgeMat, felgeMat]);
+      rad.position.set(r[0], RAD_R, r[1]);
+      gruppe.add(rad);
+      raeder.push(rad);
+    });
+
+    var schatten = new THREE.Mesh(new THREE.PlaneGeometry(4.8, 2.3),
+      new THREE.MeshBasicMaterial({ map: blobShadow(), transparent: true, depthWrite: false }));
+    schatten.rotation.x = -Math.PI / 2;
+    schatten.position.y = 0.01;
+    gruppe.add(schatten);
+
+    keinTreffer(gruppe);
+    var z = richtung > 0 ? STRASSE.mitte + 1.75 : STRASSE.mitte - 1.75;
+    gruppe.position.set(x, -0.14, z);
+    gruppe.rotation.y = richtung > 0 ? 0 : Math.PI;
+    scene.add(gruppe);
+    autos.push({ g: gruppe, raeder: raeder, richtung: richtung, x: x,
+                 speed: 5, vmax: 6.5 + Math.random() * 2.5 });
+  }
+
+  [[1, -40], [1, -8], [1, 30], [-1, 50], [-1, 12], [-1, -22], [1, 55]].forEach(function (a, i) {
+    neuesAuto(AUTO_FARBEN[i % AUTO_FARBEN.length], a[0], a[1]);
+  });
+
+  function zebraBelegt() {
+    for (var i = 0; i < passanten.length; i++) {
+      if (passanten[i].zustand === 'queren') return true;
+    }
+    return false;
+  }
+
+  function stepAutos(dt) {
+    var belegt = zebraBelegt();
+    for (var i = 0; i < autos.length; i++) {
+      var a = autos[i];
+      var soll = a.vmax;
+      // Abstand zum Vordermann in derselben Spur
+      var luecke = Infinity;
+      for (var k = 0; k < autos.length; k++) {
+        var b = autos[k];
+        if (b === a || b.richtung !== a.richtung) continue;
+        var d = (b.x - a.x) * a.richtung;
+        if (d > 0 && d < luecke) luecke = d;
+      }
+      if (luecke < 16) soll = Math.min(soll, Math.max(0, (luecke - 6.5) * 0.9));
+      // Vor dem Zebrastreifen anhalten, solange jemand hinueber will
+      if (belegt) {
+        var halt = STRASSE.zebra - a.richtung * 4.6;
+        var bis = (halt - a.x) * a.richtung;
+        if (bis > -0.4 && bis < 24) soll = Math.min(soll, Math.max(0, bis * 0.75));
+      }
+      var dv = soll - a.speed;
+      a.speed += Math.max(-7 * dt, Math.min(2.4 * dt, dv));
+      a.x += a.richtung * a.speed * dt;
+      if (a.x * a.richtung > AUTO_ENDE) a.x = -a.richtung * AUTO_ENDE;
+      a.g.position.x = a.x;
+      for (var r = 0; r < a.raeder.length; r++) a.raeder[r].rotation.z -= a.speed * dt / RAD_R;
+    }
+  }
+
+  function stepStrasse(dt) {
+    for (var i = 0; i < passanten.length; i++) stepPassant(passanten[i], dt);
+    stepAutos(dt);
+  }
+
+  window.__inspect.passanten = passanten;
+  window.__inspect.autos = autos;
 
   // ------------------------------------------------------------------ Personal
   // Drei Anstellungen, die erst ab einer Stufe zu haben sind. Die Kassiererin
@@ -5541,7 +5927,7 @@
     dt = dt || 1 / 60;
     for (var k = 0; k < (schritte || 1); k++) {
       stepPerson(lynn, dt);
-      stepGuest(dt);
+      stepStrasse(dt);
       if (kassiererin) stepPerson(kassiererin, dt);
       stepLagerist(dt);
       stepLeiterin(dt);
@@ -5555,7 +5941,7 @@
     last = now;
 
     stepPerson(lynn, dt);
-    stepGuest(dt);
+    stepStrasse(dt);
     if (kassiererin) stepPerson(kassiererin, dt);
     stepLagerist(dt);
     stepLeiterin(dt);
