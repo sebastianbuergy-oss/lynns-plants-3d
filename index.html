@@ -474,7 +474,7 @@
        und eine alte Fassung als "immer noch kaputt" durchging. Bei jeder
        Aenderung hochzaehlen. -->
   <div class="mark">
-    <b>Fleur-Blache’s Blumen</b><span>TESTVERSION &middot; V44</span>
+    <b>Fleur-Blache’s Blumen</b><span>TESTVERSION &middot; V45</span>
     <em id="premiumBadge" class="premium-badge" hidden>👑 Premium</em>
   </div>
   <div class="hud-right">
@@ -5299,26 +5299,28 @@
     return SPECIES[0];
   }
 
+  // Erst als 20x derselben Art gebaut, dann klargestellt: gemeint war ein
+  // Sortiment aus 20 VERSCHIEDENEN Pflanzen. Jedes Paket zieht reihum durch
+  // mehrere Arten, damit auch bei 20 Stueck keine zwei Nachbarn gleich sind -
+  // und bleibt bei ohnehin schon freien Arten, aus demselben Grund wie bei
+  // den Grosspaketen zuvor: keine Abkuerzung an einem Pflanzenset vorbei.
   var GROSSPAKETE = [
-    { id: 'gross-gruen', name: '20× Monstera', preis: 'CHF 5.—', art: 'Monstera',
-      note: 'Füllt viele Regale auf einen Schlag – kein Klicken, keine Münzen.' },
-    { id: 'gross-blueh', name: '20× Usambaraveilchen', preis: 'CHF 5.—', art: 'Usambaraveilchen',
-      note: 'Zwanzig blühende Töpfe auf einmal.' },
-    { id: 'gross-hang', name: '20× Grünlilie', preis: 'CHF 5.—', art: 'Grünlilie',
-      note: 'Zwanzig Hängepflanzen auf einmal.' },
-    { id: 'gross-sukk', name: '20× Echeveria', preis: 'CHF 5.—', art: 'Echeveria',
-      note: 'Zwanzig Sukkulenten auf einmal.' },
-    { id: 'gross-gross', name: '20× Bogenhanf', preis: 'CHF 5.—', art: 'Bogenhanf',
-      note: 'Zwanzig grosse Pflanzen auf einmal.' }
+    { id: 'gross-gruen', name: 'Grünes Sortiment – 20 verschiedene', preis: 'CHF 5.—',
+      arten: ['Calathea', 'Monstera', 'Zimmerlinde', 'Schwertfarn', 'Bogenhanf'],
+      note: 'Fünf Grünpflanzen-Arten gemischt, vier von jeder – füllt viele Regale auf einen Schlag.' },
+    { id: 'gross-bunt', name: 'Buntes Sortiment – 20 verschiedene', preis: 'CHF 5.—',
+      arten: ['Calathea', 'Monstera', 'Zimmerlinde', 'Schwertfarn', 'Goldkugelkaktus',
+              'Echeveria', 'Usambaraveilchen', 'Bogenhanf', 'Grünlilie'],
+      note: 'Alle freien Arten gemischt durch den ganzen Laden – kein Klicken, keine Münzen.' }
   ];
   var GROSSPAKET_MENGE = 20;
 
   function kaufeGrosspaket(paket) {
     var frei = openSlots();
-    var art = artNachName(paket.art);
     var n = Math.min(GROSSPAKET_MENGE, frei.length);
     if (!n) { say('Kein Platz frei – baue zuerst mehr Regale.'); return; }
     for (var i = 0; i < n; i++) {
+      var art = artNachName(paket.arten[i % paket.arten.length]);
       var p = fillSlot(frei[i].shelf, frei[i].slot, art);
       p.userData.pick.water = 0.75;
     }
@@ -5572,7 +5574,7 @@
     });
     abschnitt(list, 'Grosspakete – sofort geliefert');
     GROSSPAKETE.forEach(function (p) {
-      echtgeldZeile(list, 'art/plants/' + plantSlug(p.art) + '-terracotta.webp',
+      echtgeldZeile(list, 'art/plants/' + plantSlug(p.arten[0]) + '-terracotta.webp',
         p.name, p.note, p.preis, false, function () { kaufeGrosspaket(p); });
     });
   }
