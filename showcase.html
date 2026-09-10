@@ -46,8 +46,17 @@
     touch-action:none;
     overscroll-behavior:none;
   }
-  #stage{position:fixed;inset:0}
-  canvas{display:block;width:100%;height:100%}
+  /* touch-action wird NICHT vererbt. Stand es nur am body, hat Safari den
+     Ein-Finger-Zug auf dem Canvas als Scrollgeste genommen, den Zeiger
+     abgebrochen und das Drehen ging am iPhone nicht - mit der Maus schon,
+     deshalb faellt es beim Testen am Rechner nie auf. */
+  #stage{position:fixed;inset:0;touch-action:none}
+  canvas{
+    display:block;width:100%;height:100%;
+    touch-action:none;
+    -webkit-user-select:none;user-select:none;
+    -webkit-touch-callout:none;
+  }
   /* Warm grade and vignette: the cheapest way to turn a lit room into a mood. */
   #grade{
     position:fixed;inset:0;
@@ -399,7 +408,10 @@
 <div id="stage"><canvas id="scene"></canvas><div id="grade"></div></div>
 
 <header class="hud">
-  <div class="mark"><b>Lynn's Plants</b><span>3D PROTOTYP</span></div>
+  <!-- Die Versionsnummer steht sichtbar da, weil Safari die Seite gecacht hat
+       und eine alte Fassung als "immer noch kaputt" durchging. Bei jeder
+       Aenderung hochzaehlen. -->
+  <div class="mark"><b>Lynn's Plants</b><span>3D PROTOTYP &middot; V7</span></div>
   <button class="coins" id="coinBtn" type="button"><i></i><b id="coinValue">1000</b><em>+</em></button>
 </header>
 
@@ -839,7 +851,7 @@
   scene.add(lamp);
 
   var counterGlow = new THREE.PointLight('#ffc98a', 0.35, 6, 2);
-  counterGlow.position.set(-3.1, 2.1, 2.2);
+  counterGlow.position.set(-1.9, 2.1, -0.7);
   scene.add(counterGlow);
 
   // ------------------------------------------------------------------ models
@@ -1087,6 +1099,12 @@
       holder.add(model);
       group.add(holder);
       group.userData.foliage = holder;
+      // Das Modell trifft erst nach dem Aufstellen ein, die Zuordnung "dieses
+      // Mesh gehoert zu dieser Pflanze" wurde aber schon vorher gesetzt und
+      // gilt nur fuer die geloeschten Platzhalter. Ohne diese Zeile geht jeder
+      // Tipp auf eine Pflanze ins Leere - kein Giessen, kein Umtopfen, kein
+      // Umstellen, kein Entsorgen. Nachgemessen: 3 von 4 Meshes ohne Zuordnung.
+      model.traverse(function (n) { if (n.isMesh) n.userData.owner = group; });
       if (mats.green.length) {
         group.userData.tintMats = mats.green.map(function (m) {
           return { m: m, base: m.color.clone() };
@@ -1535,8 +1553,12 @@
   deskPc.traverse(function (n) { if (n.isMesh) n.userData.pc = true; });
   counter.add(deskPc);
 
-  counter.position.set(-3.1, 0, 2.4);
-  counter.rotation.y = 0.32;
+  // Nachgemessen: an der alten Stelle (-3.1 / 2.4) lag der Rechner auf der
+  // Theke im Hochformat bei Bildschirm-x = -125, also ausserhalb des Displays -
+  // und das Spiel beginnt mit "Tippe den Computer auf der Theke an". Von hier
+  // aus liegt er im Hochformat wie im Querformat sicher im Bild.
+  counter.position.set(-1.9, 0, -0.5);
+  counter.rotation.y = 0.42;
   markShadow(counter);
   scene.add(counter);
 
@@ -2082,7 +2104,7 @@
   // ------------------------------------------------------------ walk system
   // Only the counter is fixed. Everything else registers its footprint when it
   // is actually placed, and updates it when it is moved again.
-  var OBSTACLES = [{ x: -3.1, z: 2.4, r: 1.35, active: true }];
+  var OBSTACLES = [{ x: -1.9, z: -0.5, r: 1.35, active: true }];
 
   function clampToRoom(x, z) {
     return {
@@ -2313,6 +2335,9 @@
   var orbit = { yaw: HOME.yaw, pitch: HOME.pitch, dist: HOME.dist, target: HOME.target.clone() };
   var goal = { yaw: HOME.yaw, pitch: HOME.pitch, dist: HOME.dist, target: HOME.target.clone() };
 
+  window.__inspect.orbit = orbit;
+  window.__inspect.goal = goal;
+
   function angleDelta(from, to) {
     return ((to - from + Math.PI * 3) % (Math.PI * 2)) - Math.PI;
   }
@@ -2390,6 +2415,8 @@
     storeClose: document.getElementById('storeClose'),
     boot: document.getElementById('boot')
   };
+
+  window.__inspect.el = el;
 
   function say(text) { el.prompt.textContent = text; }
 
@@ -3549,11 +3576,19 @@
     camera.updateProjectionMatrix();
     if (portrait !== wasPortrait) {
       wasPortrait = portrait;
-      HOME.pitch = portrait ? 0.76 : 0.42;
-      HOME.dist = portrait ? 15.5 : 12;
+      // Der Blick zielt im Hochformat weiter nach hinten in den Laden. Vorher
+      // stand das Ziel in der Mitte, dadurch fuellte die offene Vorderseite
+      // und der helle Boden davor das untere Drittel des Bildschirms.
+      HOME.pitch = portrait ? 0.78 : 0.62;
+      HOME.dist = portrait ? 15.5 : 15;
+      // Die Theke steht vorne links und ist der erste Knopf im Spiel - sie muss
+      // beim Start im Bild sein, sonst weiss niemand, wo bestellt wird.
+      HOME.target.set(portrait ? -0.7 : 0, portrait ? 0.7 : 0.55, portrait ? -0.2 : 0.4);
       if (!placing && !focused) {
         goal.pitch = orbit.pitch = HOME.pitch;
         goal.dist = orbit.dist = HOME.dist;
+        goal.target.copy(HOME.target);
+        orbit.target.copy(HOME.target);
       }
     }
   }
