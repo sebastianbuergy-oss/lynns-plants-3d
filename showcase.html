@@ -1969,31 +1969,57 @@
     };
   }
 
+  // Farben von der gemalten Lynn abgenommen: dunkelgruene Jacke ueber cremefarbenem
+  // Shirt, anthrazitfarbene Hose, braune Stiefel, dunkles Haar im Dutt.
   var lynn = buildPerson({
-    skin: '#e2b391', top: '#4a7346', legs: '#39424d',
-    inner: '#e8e2d2', apron: '#6d5a41',
-    hair: '#2c1f18', shoes: '#5a4130', bun: true, speed: 1.85
+    skin: '#e0b28d', top: '#2f5f52', legs: '#3a3e45',
+    inner: '#efe7d6', apron: '#7b6349',
+    hair: '#2a1d16', shoes: '#4e372a', bun: true, speed: 1.85
   });
   lynn.pos.set(-0.4, 1.4);
   lynn.root.position.set(lynn.pos.x, 0, lynn.pos.y);
 
+  // Die Kundin wie im gemalten Bild: cremefarbene Strickjacke, blaue Jeans,
+  // braune Locken, helle Turnschuhe.
   var guest = buildPerson({
-    skin: '#c98d63', top: '#e8e0d0', legs: '#6d84a6',
+    skin: '#c98d63', top: '#e9dfc9', legs: '#5b7397',
     hair: '#6b4028', shoes: '#efe7d8', bun: false, speed: 1.35, stride: 1.34
   });
   guest.pos.set(3.6, 3.4);
   guest.root.position.set(guest.pos.x, 0, guest.pos.y);
 
-  // Lynn ist rund 1.72 m gross; daran haengt der Massstab des ganzen Ladens.
-  paintedActor(lynn, {
-    idle: 'lynn-idle', walk: 'lynn-walk', pass: 'lynn-pass', step: 'lynn-step',
-    backA: 'lynn-back-a', backPass: 'lynn-back-pass', backB: 'lynn-back-b'
-  }, 1.72);
+  // Gemalte Figuren stehen gut, aber sie GEHEN nicht: eine Bildtafel kann nur
+  // zwischen vier fertigen Posen springen und gleitet dazwischen ueber den
+  // Boden - genau der Eindruck, wegen dem der 2D-Stand verworfen wurde. Die
+  // gebauten Figuren haben einen echten Gehzyklus, dessen Takt an der
+  // zurueckgelegten Strecke haengt (stepPerson), damit die Fuesse nicht
+  // rutschen koennen. Also laufen sie, und die gemalten Tafeln bleiben aus.
+  // Der Code dafuer steht weiter unten und laesst sich mit einer Zeile wieder
+  // einschalten, falls es spaeter gemalte Gehphasen gibt.
+  var PAINTED_ACTORS = false;
 
-  paintedActor(guest, {
-    idle: 'guest-idle', walk: 'guest-walk', pass: 'guest-pass', step: 'guest-step',
-    backA: 'guest-back-a', backPass: 'guest-back-pass'
-  }, 1.68);
+  if (PAINTED_ACTORS) {
+    // Lynn ist rund 1.72 m gross; daran haengt der Massstab des ganzen Ladens.
+    paintedActor(lynn, {
+      idle: 'lynn-idle', walk: 'lynn-walk', pass: 'lynn-pass', step: 'lynn-step',
+      backA: 'lynn-back-a', backPass: 'lynn-back-pass', backB: 'lynn-back-b'
+    }, 1.72);
+
+    paintedActor(guest, {
+      idle: 'guest-idle', walk: 'guest-walk', pass: 'guest-pass', step: 'guest-step',
+      backA: 'guest-back-a', backPass: 'guest-back-pass'
+    }, 1.68);
+  }
+
+  // Kontaktfleck unter jeder Figur. Die Sonne wirft zwar einen echten Schatten,
+  // aber ihre Schattenkarte deckt 18 m auf 2048 Punkte ab - direkt unter dem
+  // Fuss bleibt davon zu wenig, um die Figur am Boden festzuhalten.
+  contactBlob(lynn.root, 0.62);
+  contactBlob(guest.root, 0.6);
+
+  window.__inspect.lynn = lynn;
+  window.__inspect.guest = guest;
+  window.__inspect.walkTo = walkTo;
 
   // ------------------------------------------------------------------- cat
   var cat = new THREE.Group();
@@ -2022,10 +2048,12 @@
   markShadow(cat);
   scene.add(cat);
 
-  // Die gemalte Katze aus dem 2D-Spiel, als Tafel zur Kamera gedreht. Kommt
-  // das Bild nicht an, bleibt die gebaute Katze sichtbar.
+  // Eine gemalte Tafelkatze neben gebauten Figuren wuerde aus dem Bild fallen,
+  // also bleibt auch sie gebaut. Der Fleck darunter setzt sie auf den Boden.
   var billboards = [];
-  texLoader.load(ART + 'cat-idle.png', function (t) {
+  contactBlob(cat, 0.46);
+
+  if (PAINTED_ACTORS) texLoader.load(ART + 'cat-idle.png', function (t) {
     t.encoding = THREE.sRGBEncoding;
     t.minFilter = THREE.LinearFilter;
     t.generateMipmaps = false;
