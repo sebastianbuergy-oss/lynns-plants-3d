@@ -411,7 +411,7 @@
   <!-- Die Versionsnummer steht sichtbar da, weil Safari die Seite gecacht hat
        und eine alte Fassung als "immer noch kaputt" durchging. Bei jeder
        Aenderung hochzaehlen. -->
-  <div class="mark"><b>Lynn's Plants</b><span>3D PROTOTYP &middot; V9</span></div>
+  <div class="mark"><b>Lynn's Plants</b><span>3D PROTOTYP &middot; V10</span></div>
   <button class="coins" id="coinBtn" type="button"><i></i><b id="coinValue">1000</b><em>+</em></button>
 </header>
 
@@ -860,6 +860,10 @@
   var MODELS = 'models/';
   var gltf = window.THREE && THREE.GLTFLoader ? new THREE.GLTFLoader() : null;
   var modelCache = {};
+  // Zweiter Zugriff ohne Warten: die Katalogbilder werden in dem Moment
+  // gerendert, in dem die Liste aufgeht. Ueber ein Promise kaeme das Modell
+  // immer zu spaet, und fotografiert wuerde der Platzhalter.
+  var modelReady = {};
 
   function loadModel(name) {
     if (!gltf) return Promise.resolve(null);
@@ -869,7 +873,11 @@
           // Einmal pro Modell einfaerben, bevor irgendwer eine Kopie zieht.
           // Vorher hing das an einzelnen Aufrufern - Wandregale, Deko und
           // Haengeregale liefen daran vorbei und blieben schneeweiss.
-          function (result) { warmWood(result.scene); resolve(result.scene); },
+          function (result) {
+            warmWood(result.scene);
+            modelReady[name] = result.scene;
+            resolve(result.scene);
+          },
           undefined,
           function () { resolve(null); });
       });
@@ -1066,6 +1074,10 @@
   var PLANT_MODELS = ['pp_bfloqiv5up', 'pp_7ig0hcyft93', 'pp_kgt363wkkd', 'pp_f6gpjbegg0',
     'pp_8kmkyzaqwjp', 'pp_wpqra4ewsx', 'pp_e9ortct6js', 'pp_iblx2jz90o'];
 
+  // Sofort laden, nicht erst wenn die erste Pflanze gestellt wird: der Shop
+  // fotografiert seine Katalogbilder in dem Moment, in dem die Liste aufgeht.
+  PLANT_MODELS.forEach(loadModel);
+
   function modelForSpecies(species) {
     var sum = 0;
     for (var i = 0; i < species.name.length; i++) sum += species.name.charCodeAt(i);
@@ -1073,10 +1085,23 @@
   }
 
   function dressPlant(group, species) {
-    loadModel(modelForSpecies(species)).then(function (proto) {
-      if (!proto) return;
+    var name = modelForSpecies(species);
+    // Liegt das Modell schon da, wird es sofort eingesetzt statt ueber ein
+    // Promise - nur so steht es rechtzeitig fuer das Katalogbild.
+    if (modelReady[name]) { applyPlantModel(group, species, modelReady[name]); return; }
+    loadModel(name).then(function (proto) {
+      if (proto) applyPlantModel(group, species, proto);
+    });
+  }
+
+  function applyPlantModel(group, species, proto) {
       var model = proto.clone(true);
       var mats = ownMaterials(model);
+      // Acht Modelle tragen vierundzwanzig Arten. Ohne eigene Blattfarbe sehen
+      // im Katalog mehrere Arten voellig gleich aus - Calathea, Monstera und
+      // Gummibaum waren nicht zu unterscheiden.
+      var leaf = new THREE.Color(species.leaf);
+      mats.green.forEach(function (m) { m.color.lerp(leaf, 0.72); });
       fitModel(model, 0.46, 'height');
       // Auf Hoehe skaliert werden manche Modelle ueber 0.6 m breit. Ein
       // Wandbrett ist 0.32 m tief - das Laub haengt dann vorn und hinten ueber
@@ -1111,7 +1136,6 @@
         });
       }
       if (mats.other.length) group.userData.potMats = mats.other;
-    });
   }
 
   // ----------------------------------------------------------------- pieces
@@ -1904,12 +1928,31 @@
     pelvis.scale.set(1, 0.74, 0.86);
     pelvis.position.y = -0.015;
     hips.add(pelvis);
-    var chest = new THREE.Mesh(new THREE.CylinderGeometry(0.19, 0.16, 0.56, 10), top);
-    chest.position.y = 0.28;
+    // Der Rumpf war ein glattes Rohr - daher der Flaschen-Eindruck. Jetzt ein
+    // gedrehtes Profil mit Taille, Brustkorb und weicher Schulter, und flacher
+    // als breit, wie ein Koerper eben ist.
+    var chest = new THREE.Mesh(
+      // Der Abschluss liegt bei y = 0 und damit innerhalb der Beckenkugel, die
+      // bis 0.10 reicht - sonst sieht man von schraeg unten in den offenen
+      // Rumpf hinein.
+      new THREE.LatheGeometry([
+        new THREE.Vector2(0.001, 0.00),
+        new THREE.Vector2(0.150, 0.01),
+        new THREE.Vector2(0.168, 0.08),
+        new THREE.Vector2(0.152, 0.19),   // Taille
+        new THREE.Vector2(0.164, 0.30),
+        new THREE.Vector2(0.182, 0.41),   // Brustkorb
+        new THREE.Vector2(0.188, 0.49),
+        new THREE.Vector2(0.166, 0.55),
+        new THREE.Vector2(0.098, 0.60)    // Uebergang zum Hals
+      ], 22),
+      top
+    );
+    chest.scale.z = 0.8;
     torso.add(chest);
-    var shoulders = new THREE.Mesh(new THREE.SphereGeometry(0.2, 14, 10), top);
-    shoulders.position.y = 0.52;
-    shoulders.scale.set(1, 0.55, 0.82);
+    var shoulders = new THREE.Mesh(new THREE.SphereGeometry(0.19, 16, 12), top);
+    shoulders.position.y = 0.5;
+    shoulders.scale.set(1, 0.42, 0.8);
     torso.add(shoulders);
 
     if (look.inner) {
@@ -1977,19 +2020,28 @@
     var eyeMat = new THREE.MeshStandardMaterial({ color: '#2a211c', roughness: 0.35 });
     var browMat = new THREE.MeshStandardMaterial({ color: look.hair, roughness: 0.7 });
     [-1, 1].forEach(function (s) {
-      var eye = new THREE.Mesh(new THREE.SphereGeometry(0.0155, 8, 6), eyeMat);
-      eye.position.set(s * 0.042, 0.115, 0.128);
+      var eye = new THREE.Mesh(new THREE.SphereGeometry(0.019, 10, 8), eyeMat);
+      eye.scale.set(1, 1.12, 0.7);
+      eye.position.set(s * 0.045, 0.112, 0.127);
       head.add(eye);
-      var brow = new THREE.Mesh(new THREE.BoxGeometry(0.036, 0.008, 0.012), browMat);
-      brow.position.set(s * 0.043, 0.147, 0.122);
-      brow.rotation.z = -s * 0.12;
+      var brow = new THREE.Mesh(new THREE.BoxGeometry(0.042, 0.009, 0.012), browMat);
+      brow.position.set(s * 0.046, 0.15, 0.12);
+      brow.rotation.z = -s * 0.14;
       head.add(brow);
     });
+    var mouth = new THREE.Mesh(new THREE.BoxGeometry(0.034, 0.008, 0.01),
+      new THREE.MeshStandardMaterial({ color: '#9a5f52', roughness: 0.6 }));
+    // Die Gesichtskugel reicht bis z = 0.141; alles darunter steckt in der
+    // Wange und ist unsichtbar.
+    mouth.position.set(0, 0.058, 0.136);
+    head.add(mouth);
 
-    // Pony: ohne ihn sitzt die Haarkugel wie ein Helm auf dem Kopf.
+    // Pony: ohne ihn sitzt die Haarkugel wie ein Helm auf dem Kopf. Er sitzt
+    // hoeher als zuerst gebaut, sonst verdeckt er die halbe Stirn und das
+    // Gesicht verschwindet aus Spielentfernung ganz.
     var fringe = new THREE.Mesh(new THREE.SphereGeometry(0.138, 14, 12), hairMat);
-    fringe.scale.set(0.98, 0.62, 0.72);
-    fringe.position.set(0, 0.176, 0.028);
+    fringe.scale.set(0.99, 0.5, 0.7);
+    fringe.position.set(0, 0.192, 0.022);
     head.add(fringe);
     if (look.bun) {
       var bun = new THREE.Mesh(new THREE.SphereGeometry(0.072, 10, 8), hairMat);
@@ -2988,14 +3040,16 @@
   studio.setSize(150, 150);
   studio.outputEncoding = THREE.sRGBEncoding;
   var studioScene = new THREE.Scene();
-  studioScene.add(new THREE.HemisphereLight('#eef5e8', '#4d5a42', 1.05));
-  var studioSun = new THREE.DirectionalLight('#fff4dc', 1.7);
+  // Vorher war das Studio so hell, dass jedes Blatt zu blassem Mint ausbrannte
+  // und alle Arten gleich aussahen.
+  studioScene.add(new THREE.HemisphereLight('#eef5e8', '#4d5a42', 0.7));
+  var studioSun = new THREE.DirectionalLight('#fff4dc', 1.15);
   studioSun.position.set(3.2, 5.4, 4.1);
   studioScene.add(studioSun);
   var studioCam = new THREE.PerspectiveCamera(34, 1, 0.05, 80);
   var photos = {};
 
-  function photo(key, make) {
+  function photo(key, make, cache) {
     if (photos[key]) return photos[key];
     var subject = make();
     subject.position.set(0, 0, 0);
@@ -3017,14 +3071,20 @@
     if (!isFinite(box.min.x)) box.set(new THREE.Vector3(-0.5, 0, -0.5), new THREE.Vector3(0.5, 1, 0.5));
     var size = box.getSize(new THREE.Vector3());
     var centre = box.getCenter(new THREE.Vector3());
-    var reach = Math.max(size.x, size.y, size.z) * 0.62 + 0.22;
+    // Der feste Zuschlag von 22 cm war fuer ein Regal gedacht. Eine Pflanze ist
+    // nur einen halben Meter hoch und sass damit als Briefmarke in der Mitte
+    // des Bildes. Jetzt ist der Rand ein Anteil der Groesse, also fuellt jedes
+    // Motiv den Rahmen gleich gut.
+    var reach = Math.max(size.x, size.y, size.z) * 0.68 + 0.04;
     var away = reach / Math.tan(Math.PI * 34 / 360);
     studioCam.position.set(centre.x + away * 0.58, centre.y + away * 0.44, centre.z + away * 0.7);
     studioCam.lookAt(centre);
     studio.render(studioScene, studioCam);
     var url = studio.domElement.toDataURL('image/png');
     studioScene.remove(subject);
-    photos[key] = url;
+    // Ein Bild, das vor dem Modell entstanden ist, darf nicht haengenbleiben -
+    // sonst zeigt der Katalog den Platzhalter fuer den Rest des Spiels.
+    if (cache !== false) photos[key] = url;
     return url;
   }
 
@@ -3141,7 +3201,9 @@
       chosen.species.forEach(function (species) {
         var cost = Math.round(species.price * 0.55);
         list.appendChild(offerRow(
-          photo('plant-' + species.name, function () { return buildPlant(species, 1); }),
+          photo('plant-' + species.name,
+            function () { return buildPlant(species, 1); },
+            !!modelReady[modelForSpecies(species)]),
           species.name,
           'Einkauf ' + cost + ' · Verkauf ab ' + species.price + ' Münzen',
           cost + ' ●', coins >= cost && free > 0,
