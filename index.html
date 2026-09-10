@@ -456,7 +456,7 @@
   <!-- Die Versionsnummer steht sichtbar da, weil Safari die Seite gecacht hat
        und eine alte Fassung als "immer noch kaputt" durchging. Bei jeder
        Aenderung hochzaehlen. -->
-  <div class="mark"><b>Lynn's Plants</b><span>3D PROTOTYP &middot; V36</span></div>
+  <div class="mark"><b>Lynn's Plants</b><span>3D PROTOTYP &middot; V37</span></div>
   <div class="hud-right">
     <div class="level" id="levelBox"><b id="levelValue">LV 1</b><i><em id="levelFill"></em></i></div>
     <button class="coins" id="coinBtn" type="button"><i></i><b id="coinValue">1000</b><em>+</em></button>
@@ -549,8 +549,11 @@
   var scene = new THREE.Scene();
   // Das gemalte Vorbild ist hell und warm. Ein dunkelgruener Hintergrund hat
   // den ganzen Laden kalt gemacht - hier steht jetzt Gartenlicht dahinter.
-  scene.background = new THREE.Color('#b9d3ae');
-  scene.fog = new THREE.Fog('#c3d8b6', 26, 52);
+  // In der Stadt steht der Laden nicht mehr im Gruenen: heller, leicht
+  // dunstiger Himmel. Der Dunst schluckt die Strasse nach etwa fuenfzig Metern,
+  // dort tauchen Autos und Passanten auf und verschwinden wieder.
+  scene.background = new THREE.Color('#d6e2e1');
+  scene.fog = new THREE.Fog('#d6e2e1', 30, 64);
 
   var camera = new THREE.PerspectiveCamera(34, 1, 0.1, 120);
 
@@ -713,9 +716,69 @@
     return group;
   }
 
-  var wallBack = makeWall(0, -ROOM_D / 2, 0, ROOM_W, 0, -1, 6);
+  // Vorne geht es zur Strasse, hinten in den Garten. Beide Waende haben
+  // deshalb eine Tuer: zwei Wandstuecke und ein Sturz darueber, alle mit
+  // derselben Normalen, damit sie gemeinsam verschwinden, wenn die Kamera
+  // davor steht. Durch die vordere Tuer kommen die Kunden von der Strasse.
+  var TUER_VORNE = { x0: 0.9, x1: 2.5 };
+  var TUER_HINTEN = { x0: 2.8, x1: 4.4 };
+
+  function wandMitTuer(z, rotY, nz, tuer) {
+    var links = tuer.x0 + ROOM_W / 2;
+    var rechts = ROOM_W / 2 - tuer.x1;
+    var a = makeWall(-ROOM_W / 2 + links / 2, z, rotY, links, 0, nz, 6);
+    makeWall(tuer.x1 + rechts / 2, z, rotY, rechts, 0, nz, 6);
+    // Sturz: nur Putz, von Tuerhoehe bis unter die Decke
+    var sturz = new THREE.Group();
+    var breite = tuer.x1 - tuer.x0;
+    var tuerH = 2.35;
+    var putz = new THREE.Mesh(new THREE.PlaneGeometry(breite, WALL_H - tuerH), wallUpMat);
+    putz.position.set((tuer.x0 + tuer.x1) / 2, (WALL_H + tuerH) / 2, z);
+    putz.rotation.y = rotY;
+    sturz.add(putz);
+    var zarge = new THREE.MeshStandardMaterial({ color: '#7c5230', roughness: 0.7 });
+    [[tuer.x0, tuerH / 2, 0.1, tuerH], [tuer.x1, tuerH / 2, 0.1, tuerH],
+     [(tuer.x0 + tuer.x1) / 2, tuerH, breite + 0.1, 0.1]].forEach(function (b) {
+      var holz = new THREE.Mesh(new THREE.BoxGeometry(b[2], b[3], 0.16), zarge);
+      holz.position.set(b[0], b[1], z);
+      holz.castShadow = holz.receiveShadow = true;
+      sturz.add(holz);
+    });
+    scene.add(sturz);
+    walls.push({
+      group: sturz,
+      centre: new THREE.Vector3((tuer.x0 + tuer.x1) / 2, WALL_H / 2, z),
+      normal: new THREE.Vector3(0, 0, nz)
+    });
+    return { wand: a, sturz: sturz };
+  }
+
+  var hinten = wandMitTuer(-ROOM_D / 2, 0, -1, TUER_HINTEN);
+  var wallBack = hinten.wand;
   buildWindow(wallBack, 0, -ROOM_D / 2 + 0.06, 0);
-  var wallFront = makeWall(0, ROOM_D / 2, Math.PI, ROOM_W, 0, 1, 6);
+  var vorne = wandMitTuer(ROOM_D / 2, Math.PI, 1, TUER_VORNE);
+  var wallFront = vorne.wand;
+
+  // Die Hintertuer ist zu, bis hinten etwas gekauft ist. Angeschlagen an der
+  // rechten Zarge, sie schwingt nach aussen auf.
+  var hinterTuer = new THREE.Group();
+  hinterTuer.position.set(TUER_HINTEN.x1 - 0.05, 0, -ROOM_D / 2);
+  var tuerBlatt = new THREE.Mesh(
+    new THREE.BoxGeometry(TUER_HINTEN.x1 - TUER_HINTEN.x0 - 0.12, 2.28, 0.06),
+    new THREE.MeshStandardMaterial({ color: '#5f7c50', roughness: 0.8 })
+  );
+  tuerBlatt.position.set(-(TUER_HINTEN.x1 - TUER_HINTEN.x0 - 0.12) / 2, 1.14, 0);
+  tuerBlatt.castShadow = tuerBlatt.receiveShadow = true;
+  hinterTuer.add(tuerBlatt);
+  var klinke = new THREE.Mesh(new THREE.SphereGeometry(0.035, 8, 6),
+    new THREE.MeshStandardMaterial({ color: '#c9a86a', roughness: 0.4, metalness: 0.4 }));
+  klinke.position.set(-(TUER_HINTEN.x1 - TUER_HINTEN.x0) + 0.28, 1.05, 0.05);
+  hinterTuer.add(klinke);
+  hinten.sturz.add(hinterTuer);
+
+  function oeffneHintertuer() {
+    hinterTuer.rotation.y = 1.9;
+  }
   var wallLeft = makeWall(-ROOM_W / 2, 0, Math.PI / 2, ROOM_D, -1, 0, 5);
   var wallRight = makeWall(ROOM_W / 2, 0, -Math.PI / 2, ROOM_D, 1, 0, 5);
 
@@ -807,12 +870,12 @@
   // Baeume hinter der Hecke. Gemalte Tafeln, die zur Kamera schauen - genug
   // Tiefe fuers Auge, ohne dass eine Krone aus tausend Blaettern gebaut wird.
   var BAEUME = [
-    ['baum1', -12.5, -9.5, 5.6], ['baum2', -8.5, -11.5, 4.8],
-    ['baum1', -3.0, -12.5, 6.2], ['baum2', 4.5, -12.0, 5.0],
-    ['baum1', 10.5, -10.0, 5.8], ['baum2', 13.5, -4.5, 4.6],
-    ['baum1', 14.0, 3.5, 6.0], ['baum2', 12.5, 10.5, 4.8],
-    ['baum1', -13.5, -1.5, 5.4], ['baum2', -13.0, 6.5, 4.6],
-    ['baum1', -9.5, 13.5, 5.8], ['baum2', 6.5, 14.0, 5.2]
+    ['baum1', -17.5, -9.5, 5.6], ['baum2', -18.5, -17.0, 4.8],
+    ['baum1', -16.0, -25.0, 6.2], ['baum2', -8.0, -30.0, 5.0],
+    ['baum1', 1.0, -31.0, 6.4], ['baum2', 9.5, -30.0, 5.2],
+    ['baum1', 17.0, -24.0, 5.8], ['baum2', 18.5, -15.5, 4.6],
+    ['baum1', 17.0, -8.0, 5.4], ['baum2', -24.0, -12.0, 5.0],
+    ['baum1', 24.5, -19.0, 6.0], ['baum2', -3.5, -38.0, 5.6]
   ];
 
   var wallProbe = new THREE.Vector3();
@@ -822,6 +885,9 @@
       wallProbe.copy(camera.position).sub(w.centre);
       w.group.visible = wallProbe.dot(w.normal) < 0.2;
     }
+    // Die Lichterkette haengt an der Rueckwand und darf nicht allein in der
+    // Luft stehen bleiben, wenn die Wand ausgeblendet ist.
+    if (bulbs) bulbs.visible = wallBack.visible;
   }
 
   // pavement outside the open sides, so the box reads as a shop, not a stage
@@ -829,12 +895,15 @@
   // ground outside is darker now and a hedge closes the view off.
   // Draussen lag eine einfarbige helle Flaeche. Jetzt gemalte Sommerwiese,
   // gross genug, dass beim Herausdrehen nirgends eine Kante auftaucht.
+  // Hinter der Haeuserzeile Wiese bis in den Dunst - dort liegt das Land fuer
+  // Anbauten. Die Flaeche reicht vorne bis an den Gehweg, damit auch in den
+  // schmalen Fugen zwischen Laden und Nachbarhaus Boden liegt.
   var pavement = new THREE.Mesh(
-    new THREE.PlaneGeometry(52, 52),
-    paintedMaterial('boden-wiese', 13, 13, '#6d8a52', { roughness: 1 })
+    new THREE.PlaneGeometry(120, 72),
+    paintedMaterial('boden-wiese', 30, 18, '#6d8a52', { roughness: 1 })
   );
   pavement.rotation.x = -Math.PI / 2;
-  pavement.position.y = -0.06;
+  pavement.position.set(0, -0.06, ROOM_D / 2 - 36);
   pavement.receiveShadow = true;
   scene.add(pavement);
 
@@ -848,23 +917,24 @@
   // Drehung und Farbton stecken pro Busch in der Matrix.
   // Ein Weg zur Tuer. Ohne ihn steht der Laden mitten in der Wiese, als waere
   // er dort abgestellt worden.
+  // Der Pflasterweg lag vor dem Laden; dort ist jetzt Gehweg. Das Material
+  // bleibt fuer die Wege im Garten hinter dem Haus.
   var pathMat = paintedMaterial('boden-weg', 1.6, 5, '#8d9a86', { roughness: 1 });
-  var path = new THREE.Mesh(new THREE.PlaneGeometry(2.6, 9), pathMat);
-  path.rotation.x = -Math.PI / 2;
-  path.position.set(0, -0.04, ROOM_D / 2 + 4.6);
-  path.receiveShadow = true;
-  scene.add(path);
 
+  // Das Land hinter dem Haus: bis zur Hecke, rund 14 m zu beiden Seiten.
+  var HINTEN = { breit: 13.5, ende: -27 };
   var hedgeGeo = new THREE.SphereGeometry(0.78, 10, 8);
   var hedgeTones = ['#456f3c', '#4e7a44', '#3c6435'].map(function (c) {
     return new THREE.Color(c);
   });
   var hedgeSpots = [];
-  for (var hx = -8; hx <= 8; hx += 1.15) {
-    hedgeSpots.push([hx, -ROOM_D / 2 - 3.4], [hx, ROOM_D / 2 + 7.4]);
+  // Die Hecke fasst das Land hinter dem Haus ein: hinten quer und an beiden
+  // Seiten bis an die Rueckwaende der Nachbarhaeuser.
+  for (var hx = -HINTEN.breit; hx <= HINTEN.breit; hx += 1.15) {
+    hedgeSpots.push([hx, HINTEN.ende - 0.6]);
   }
-  for (var hz = -ROOM_D / 2 - 3; hz <= ROOM_D / 2 + 7; hz += 1.15) {
-    hedgeSpots.push([-ROOM_W / 2 - 3.2, hz], [ROOM_W / 2 + 3.2, hz]);
+  for (var hz = HINTEN.ende; hz <= -ROOM_D / 2 - 0.8; hz += 1.15) {
+    hedgeSpots.push([-HINTEN.breit - 0.6, hz], [HINTEN.breit + 0.6, hz]);
   }
 
   var hedgeBushes = [];
@@ -924,6 +994,372 @@
     }
     hedge.instanceMatrix.needsUpdate = true;
   }
+
+
+  // ------------------------------------------------------------------ Stadt
+  // Der Laden steht in einer Haeuserzeile an einer belebten Strasse: vor der
+  // Tuer der Gehweg, dann Fahrbahn, gegenueber die naechste Haeuserzeile.
+  // Hinter dem Haus bleibt Land fuer Anbauten (siehe HINTEN).
+  var STRASSE = {
+    bord: ROOM_D / 2 + 4.0,      // Bordsteinkante auf der Ladenseite
+    mitte: ROOM_D / 2 + 7.5,     // Mittellinie
+    gegen: ROOM_D / 2 + 11.0,    // Bordstein gegenueber
+    front: ROOM_D / 2 + 15.0,    // Hausfronten gegenueber
+    laenge: 132,
+    zebra: 9.2                   // Zebrastreifen rechts neben dem Laden
+  };
+
+  // Viele kleine, unbewegte Teile als ein einziges Mesh: Lage und Farbe
+  // stecken in den Eckpunkten. Einzeln waeren Bordsteine, Laternen und
+  // Hauskoerper mehrere hundert Zeichenaufrufe pro Bild.
+  function verschmelze(teile) {
+    var pos = [], nor = [], col = [], uvs = [];
+    var farbe = new THREE.Color();
+    teile.forEach(function (t) {
+      var g = t.geo.index ? t.geo.toNonIndexed() : t.geo.clone();
+      g.applyMatrix4(t.matrix);
+      var p = g.attributes.position.array;
+      var no = g.attributes.normal.array;
+      var u = g.attributes.uv ? g.attributes.uv.array : null;
+      farbe.set(t.farbe);
+      for (var i = 0; i < p.length / 3; i++) {
+        pos.push(p[i * 3], p[i * 3 + 1], p[i * 3 + 2]);
+        nor.push(no[i * 3], no[i * 3 + 1], no[i * 3 + 2]);
+        col.push(farbe.r, farbe.g, farbe.b);
+        uvs.push(u ? u[i * 2] * (t.uvx || 1) : 0, u ? u[i * 2 + 1] * (t.uvy || 1) : 0);
+      }
+    });
+    var geo = new THREE.BufferGeometry();
+    geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+    geo.setAttribute('normal', new THREE.Float32BufferAttribute(nor, 3));
+    geo.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
+    geo.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2));
+    geo.computeBoundingSphere();
+    return geo;
+  }
+
+  function lage(x, y, z, ry, sx, sy, sz) {
+    var m = new THREE.Matrix4();
+    m.compose(new THREE.Vector3(x, y, z),
+              new THREE.Quaternion().setFromEuler(new THREE.Euler(0, ry || 0, 0)),
+              new THREE.Vector3(sx || 1, sy || 1, sz || 1));
+    return m;
+  }
+
+  // Gehwege, Fahrbahn, Bordsteine
+  var gehwegMat = paintedMaterial('stadt/gehweg', STRASSE.laenge / 2.4, 4 / 2.4, '#b8b0a4', { roughness: 0.95 });
+  var gehwegGegenMat = paintedMaterial('stadt/gehweg', STRASSE.laenge / 2.4, 4 / 2.4, '#b8b0a4', { roughness: 0.95 });
+  var asphaltMat = paintedMaterial('stadt/asphalt', STRASSE.laenge / 4, 7 / 4, '#6a655f', { roughness: 0.98 });
+
+  function flaeche(mat, breite, tiefe, z, y) {
+    var m = new THREE.Mesh(new THREE.PlaneGeometry(breite, tiefe), mat);
+    m.rotation.x = -Math.PI / 2;
+    m.position.set(0, y, z);
+    m.receiveShadow = true;
+    scene.add(m);
+    return m;
+  }
+  flaeche(gehwegMat, STRASSE.laenge, STRASSE.bord - ROOM_D / 2, (ROOM_D / 2 + STRASSE.bord) / 2, -0.025);
+  flaeche(asphaltMat, STRASSE.laenge, STRASSE.gegen - STRASSE.bord, STRASSE.mitte, -0.14);
+  flaeche(gehwegGegenMat, STRASSE.laenge, STRASSE.front - STRASSE.gegen, (STRASSE.gegen + STRASSE.front) / 2, -0.025);
+  // Hinter der Haeuserzeile gegenueber: Pflaster bis in den Dunst
+  flaeche(new THREE.MeshStandardMaterial({ color: '#a9a194', roughness: 1 }),
+          STRASSE.laenge, 60, STRASSE.front + 30, -0.05);
+
+  var strassenTeile = [];
+  var kante = new THREE.BoxGeometry(1, 1, 1);
+  [STRASSE.bord, STRASSE.gegen].forEach(function (z) {
+    strassenTeile.push({ geo: kante, matrix: lage(0, -0.075, z, 0, STRASSE.laenge, 0.13, 0.24), farbe: '#cfc8bd' });
+  });
+  // Mittellinie, gestrichelt
+  for (var sx = -STRASSE.laenge / 2 + 1; sx < STRASSE.laenge / 2; sx += 3.2) {
+    if (Math.abs(sx - STRASSE.zebra) < 2.4) continue;
+    strassenTeile.push({ geo: kante, matrix: lage(sx, -0.136, STRASSE.mitte, 0, 1.6, 0.01, 0.13), farbe: '#efe9dc' });
+  }
+  // Zebrastreifen: Balken in Fahrtrichtung, nebeneinander ueber die Fahrbahn
+  for (var zz = STRASSE.bord + 0.5; zz < STRASSE.gegen - 0.3; zz += 1.0) {
+    strassenTeile.push({ geo: kante, matrix: lage(STRASSE.zebra, -0.135, zz, 0, 3.0, 0.01, 0.5), farbe: '#f1ece2' });
+  }
+  var strassenMesh = new THREE.Mesh(verschmelze(strassenTeile),
+    new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.9 }));
+  strassenMesh.receiveShadow = true;
+  scene.add(strassenMesh);
+
+  // Laternen: gusseisern, dunkelgruen, mit warmer Glaskugel. Pfosten und Koepfe
+  // sind ein Mesh, die Kugeln ein zweites, das nicht beleuchtet wird.
+  var laternenTeile = [];
+  var kugelTeile = [];
+  var pfostenGeo = new THREE.CylinderGeometry(0.06, 0.09, 1, 8);
+  var sockelGeo = new THREE.CylinderGeometry(0.16, 0.2, 1, 8);
+  var kopfGeo = new THREE.CylinderGeometry(0.2, 0.12, 1, 8);
+  var kugelGeo = new THREE.SphereGeometry(0.17, 10, 8);
+  function laterne(x, z) {
+    laternenTeile.push({ geo: sockelGeo, matrix: lage(x, 0.25, z, 0, 1, 0.5, 1), farbe: '#2f4238' });
+    laternenTeile.push({ geo: pfostenGeo, matrix: lage(x, 2.2, z, 0, 1, 3.9, 1), farbe: '#2f4238' });
+    laternenTeile.push({ geo: kopfGeo, matrix: lage(x, 4.42, z, 0, 1, 0.14, 1), farbe: '#2f4238' });
+    kugelTeile.push({ geo: kugelGeo, matrix: lage(x, 4.22, z), farbe: '#fff1c9' });
+  }
+  var BAUMPLAETZE = [];
+  for (var lx = -STRASSE.laenge / 2 + 6; lx < STRASSE.laenge / 2; lx += 14) {
+    // Direkt vor dem Laden stehen weder Laterne noch Baum im Bild
+    if (Math.abs(lx) > 7) laterne(lx, STRASSE.bord - 0.35);
+    laterne(lx + 7, STRASSE.gegen + 0.35);
+    if (Math.abs(lx + 7) > 9) BAUMPLAETZE.push([lx + 7, STRASSE.bord - 0.55]);
+    BAUMPLAETZE.push([lx, STRASSE.gegen + 0.6]);
+  }
+  var laternenMesh = new THREE.Mesh(verschmelze(laternenTeile),
+    new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.6, metalness: 0.2 }));
+  laternenMesh.castShadow = true;
+  scene.add(laternenMesh);
+  scene.add(new THREE.Mesh(verschmelze(kugelTeile),
+    new THREE.MeshBasicMaterial({ vertexColors: true })));
+
+  // Strassenbaeume in einer Baumscheibe. Die gemalten Baeume weichen, sobald
+  // sie naeher an der Kamera stehen als der Laden.
+  var scheibenTeile = [];
+  BAUMPLAETZE.forEach(function (b, i) {
+    decorCard(i % 2 ? 'baum2' : 'baum1', b[0], b[1], 4.6 + (i % 3) * 0.4, 0, false, true);
+    scheibenTeile.push({ geo: kante, matrix: lage(b[0], -0.02, b[1], 0, 1.2, 0.02, 1.2), farbe: '#5b4a3a' });
+  });
+  scene.add(new THREE.Mesh(verschmelze(scheibenTeile),
+    new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 1 })));
+
+  // ------------------------------------------------------------ Haeuserzeilen
+  // Jedes Haus: gemalte Fassade vorne, ein Koerper mit Fensterreihen fuer
+  // Seiten und Rueckseite, Satteldach. Die Breite folgt aus dem Bild, damit
+  // die Fassade nicht verzerrt wird; die Hoehe liegt bei knapp neun Metern.
+  var FASSADEN = [
+    { bild: 'f1', w: 367, putz: '#dfdbd7', dach: '#5b5f66' },
+    { bild: 'f2', w: 384, putz: '#e0b4a1', dach: '#a4553a' },
+    { bild: 'f3', w: 408, putz: '#e3cc9e', dach: '#8a4a34' },
+    { bild: 'f4', w: 426, putz: '#f0e2d9', dach: '#6b5a55' },
+    { bild: 'f5', w: 339, putz: '#e6ebdf', dach: '#5b5f66' },
+    { bild: 'f6', w: 375, putz: '#b86a4c', dach: '#4d4b4e' },
+    { bild: 'f7', w: 439, putz: '#d9c2a8', dach: '#a4553a' },
+    { bild: 'f8', w: 473, putz: '#f2d8d0', dach: '#7a4b3c' },
+    { bild: 'f9', w: 426, putz: '#d8d6cc', dach: '#5b5f66' }
+  ];
+  var HAUS_H = 8.8;
+  var HAUS_TIEFE = ROOM_D;
+  var fassadenTex = {};
+
+  function fensterTextur() {
+    var c = document.createElement('canvas');
+    c.width = c.height = 128;
+    var g = c.getContext('2d');
+    g.fillStyle = '#ffffff';
+    g.fillRect(0, 0, 128, 128);
+    g.fillStyle = '#f7f1e4';
+    g.fillRect(36, 26, 56, 78);
+    g.fillStyle = '#56666e';
+    g.fillRect(42, 32, 44, 66);
+    g.fillStyle = 'rgba(255,255,255,0.18)';
+    g.fillRect(42, 32, 20, 66);
+    g.fillStyle = '#f7f1e4';
+    g.fillRect(62, 32, 4, 66);
+    g.fillRect(32, 104, 64, 7);
+    var t = new THREE.CanvasTexture(c);
+    t.wrapS = t.wrapT = THREE.RepeatWrapping;
+    t.encoding = THREE.sRGBEncoding;
+    return t;
+  }
+  var fensterTex = fensterTextur();
+
+  var haeuser = [];
+
+  function dachGeo(breite, tiefe, hoehe) {
+    var form = new THREE.Shape();
+    form.moveTo(-tiefe / 2, 0);
+    form.lineTo(tiefe / 2, 0);
+    form.lineTo(0, hoehe);
+    form.lineTo(-tiefe / 2, 0);
+    var g = new THREE.ExtrudeGeometry(form, { depth: breite, bevelEnabled: false });
+    g.rotateY(Math.PI / 2);
+    g.translate(-breite / 2, 0, 0);
+    return g;
+  }
+
+  // richtung +1: Fassade schaut nach +z (Ladenseite), -1: nach -z (gegenueber)
+  function haus(xMitte, frontZ, richtung, f) {
+    var breite = HAUS_H * f.w / 640;
+    var mitteZ = frontZ - richtung * HAUS_TIEFE / 2;
+    var dachH = 2.3;
+
+    var koerper = new THREE.BoxGeometry(breite, HAUS_H, HAUS_TIEFE);
+    var teile = [
+      { geo: koerper, matrix: lage(xMitte, HAUS_H / 2, mitteZ), farbe: f.putz,
+        uvx: breite / 3.1, uvy: HAUS_H / 2.9 }
+    ];
+    var gebaeude = new THREE.Mesh(verschmelze(teile),
+      new THREE.MeshStandardMaterial({ vertexColors: true, map: fensterTex, roughness: 0.95 }));
+    gebaeude.receiveShadow = true;
+    scene.add(gebaeude);
+
+    var dach = new THREE.Mesh(
+      verschmelze([{ geo: dachGeo(breite + 0.08, HAUS_TIEFE + 0.5, dachH),
+                     matrix: lage(xMitte, HAUS_H, mitteZ), farbe: f.dach }]),
+      new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.85 }));
+    scene.add(dach);
+
+    var fassadeMat = new THREE.MeshBasicMaterial({ color: '#ffffff' });
+    var fassade = new THREE.Mesh(new THREE.PlaneGeometry(breite, HAUS_H), fassadeMat);
+    fassade.position.set(xMitte, HAUS_H / 2, frontZ + richtung * 0.02);
+    fassade.rotation.y = richtung > 0 ? 0 : Math.PI;
+    scene.add(fassade);
+    if (!fassadenTex[f.bild]) {
+      fassadenTex[f.bild] = { tex: null, warten: [] };
+      texLoader.load(ART + 'stadt/' + f.bild + '.webp', function (t) {
+        t.encoding = THREE.sRGBEncoding;
+        t.anisotropy = maxAniso;
+        fassadenTex[f.bild].tex = t;
+        fassadenTex[f.bild].warten.forEach(function (m) { m.map = t; m.needsUpdate = true; });
+      });
+    }
+    if (fassadenTex[f.bild].tex) fassadeMat.map = fassadenTex[f.bild].tex;
+    else fassadenTex[f.bild].warten.push(fassadeMat);
+
+    var box = new THREE.Box3(
+      new THREE.Vector3(xMitte - breite / 2, 0, Math.min(frontZ, frontZ - richtung * HAUS_TIEFE)),
+      new THREE.Vector3(xMitte + breite / 2, HAUS_H + dachH, Math.max(frontZ, frontZ - richtung * HAUS_TIEFE))
+    );
+    haeuser.push({
+      mats: [gebaeude.material, dach.material, fassadeMat],
+      meshes: [gebaeude, dach, fassade],
+      box: box, deckung: 1
+    });
+    return breite;
+  }
+
+  // Reihenfolge der Fassaden fest gemischt, damit keine zwei gleichen
+  // nebeneinander stehen und das Bild bei jedem Start dasselbe ist.
+  var fassadenFolge = [3, 0, 6, 1, 8, 4, 2, 7, 5];
+  var fassadenIndex = 0;
+  function naechsteFassade() {
+    return FASSADEN[fassadenFolge[fassadenIndex++ % fassadenFolge.length]];
+  }
+
+  (function () {
+    var fuge = 0.06;
+    // Ladenseite: vom Laden weg nach links und nach rechts
+    [-1, 1].forEach(function (seite) {
+      var x = seite * (ROOM_W / 2 + 0.4);
+      while (Math.abs(x) < STRASSE.laenge / 2) {
+        var f = naechsteFassade();
+        var b = HAUS_H * f.w / 640;
+        haus(x + seite * b / 2, ROOM_D / 2, 1, f);
+        x += seite * (b + fuge);
+      }
+    });
+    // Gegenueber: eine durchgehende Zeile
+    var x2 = -STRASSE.laenge / 2;
+    while (x2 < STRASSE.laenge / 2) {
+      var f2 = naechsteFassade();
+      var b2 = HAUS_H * f2.w / 640;
+      haus(x2 + b2 / 2, STRASSE.front, -1, f2);
+      x2 += b2 + fuge;
+    }
+  })();
+
+  // Ein Haus, das zwischen Kamera und Laden steht, wird durchsichtig. Geprueft
+  // wird der Blick auf die Mitte und auf die vier Ecken des Ladens - verdeckt
+  // ein Haus einen davon, weicht es. So laesst sich der Laden von jeder Seite
+  // anschauen, ohne dass die Stadt drumherum verschwindet.
+  var sichtStrahl = new THREE.Ray();
+  var sichtTreffer = new THREE.Vector3();
+  var sichtZiel = new THREE.Vector3();
+  var SICHT_PUNKTE = [[0, 0], [-1, -1], [1, -1], [-1, 1], [1, 1]];
+
+  function verdeckt(box) {
+    if (box.containsPoint(camera.position)) return true;
+    for (var i = 0; i < SICHT_PUNKTE.length; i++) {
+      var p = SICHT_PUNKTE[i];
+      if (i === 0) sichtZiel.copy(orbit.target);
+      else sichtZiel.set(p[0] * (ROOM_W / 2 - 0.3), 1.2, p[1] * (ROOM_D / 2 - 0.3));
+      sichtStrahl.origin.copy(camera.position);
+      sichtStrahl.direction.copy(sichtZiel).sub(camera.position);
+      var weit = sichtStrahl.direction.length();
+      sichtStrahl.direction.divideScalar(weit);
+      if (sichtStrahl.intersectBox(box, sichtTreffer) &&
+          sichtTreffer.distanceTo(camera.position) < weit) return true;
+    }
+    return false;
+  }
+
+  function updateHaeuser(dt) {
+    for (var i = 0; i < haeuser.length; i++) {
+      var h = haeuser[i];
+      // Ganz weg statt nur blass: ein halb durchsichtiges Haus legte einen
+      // milchigen Schleier ueber den ganzen Laden. So verhaelt es sich wie die
+      // Ladenwaende, die ebenfalls verschwinden, wenn die Kamera davor steht.
+      var soll = verdeckt(h.box) ? 0 : 1;
+      if (Math.abs(soll - h.deckung) < 0.005) continue;
+      h.deckung += (soll - h.deckung) * Math.min(1, dt * 8);
+      if (Math.abs(soll - h.deckung) < 0.02) h.deckung = soll;
+      var durch = h.deckung < 0.995;
+      for (var k = 0; k < h.mats.length; k++) {
+        var m = h.mats[k];
+        m.transparent = durch;
+        m.depthWrite = !durch;
+        m.opacity = h.deckung;
+        h.meshes[k].visible = h.deckung > 0.01;
+      }
+    }
+  }
+
+  // ---------------------------------------------------------- Kundenstopper
+  // Ein Schild ueber der Tuer stand aus der ueblichen Kamerahoehe mitten im
+  // Bild und verdeckte das vordere Drittel des Ladens. Der Aufsteller auf dem
+  // Gehweg ist klein, steht unten und zeigt trotzdem jedem Passanten, was
+  // hier verkauft wird. Dazu zwei Kuebel neben der Tuer.
+  (function () {
+    var c = document.createElement('canvas');
+    c.width = 256; c.height = 384;
+    var g = c.getContext('2d');
+    g.fillStyle = '#8a6440';
+    g.fillRect(0, 0, 256, 384);
+    g.fillStyle = '#2c3b33';
+    g.fillRect(14, 14, 228, 356);
+    g.fillStyle = '#f3ead6';
+    g.textAlign = 'center';
+    g.font = 'bold 44px Georgia, serif';
+    g.fillText('Lynn\u2019s', 128, 92);
+    g.fillText('Plants', 128, 142);
+    g.strokeStyle = 'rgba(243,234,214,0.6)';
+    g.lineWidth = 3;
+    g.beginPath(); g.moveTo(52, 170); g.lineTo(204, 170); g.stroke();
+    g.font = '26px Georgia, serif';
+    g.fillText('Pflanzen', 128, 214);
+    g.fillText('T\u00f6pfe \u00b7 Erde', 128, 252);
+    g.fillStyle = '#9bc27f';
+    g.font = 'bold 30px Georgia, serif';
+    g.fillText('Herein!', 128, 322);
+    var t = new THREE.CanvasTexture(c);
+    t.encoding = THREE.sRGBEncoding;
+    t.anisotropy = maxAniso;
+    var tafel = new THREE.MeshStandardMaterial({ map: t, roughness: 0.85 });
+    var holz = new THREE.MeshStandardMaterial({ color: '#8a6440', roughness: 0.85 });
+    var aufsteller = new THREE.Group();
+    [1, -1].forEach(function (seite) {
+      var brett = new THREE.Mesh(new THREE.BoxGeometry(0.6, 0.9, 0.03),
+        [holz, holz, holz, holz, seite > 0 ? tafel : holz, seite < 0 ? tafel : holz]);
+      brett.position.set(0, 0.44, seite * 0.13);
+      brett.rotation.x = seite * 0.26;
+      brett.castShadow = true;
+      aufsteller.add(brett);
+    });
+    aufsteller.position.set(TUER_VORNE.x1 + 1.0, 0, ROOM_D / 2 + 1.0);
+    aufsteller.rotation.y = -0.35;
+    scene.add(aufsteller);
+    // contactBlob gibt es an dieser Stelle noch nicht - eigener Fleck
+    var fleck = new THREE.Mesh(new THREE.PlaneGeometry(0.8, 0.6),
+      new THREE.MeshBasicMaterial({ map: blobShadow(), transparent: true, depthWrite: false }));
+    fleck.rotation.x = -Math.PI / 2;
+    fleck.position.y = 0.006;
+    aufsteller.add(fleck);
+
+    decorCard('d-boden1', TUER_VORNE.x0 - 0.45, ROOM_D / 2 + 0.45, 1.25, 0, false);
+    decorCard('d-boden2', TUER_VORNE.x1 + 0.45, ROOM_D / 2 + 0.45, 1.3, 0, false);
+  })();
 
   // A faint darkening at the edges stands in for the shading a real corner
   // collects. Cheap, and it stops the floor reading as a flat sheet.
@@ -2243,7 +2679,6 @@
   });
 
   buildBulbs();
-  placeMeadowSign();
 
   // ---------------------------------------------------------------- persons
   function limb(mat, length, thickness) {
@@ -2609,12 +3044,41 @@
   // is actually placed, and updates it when it is moved again.
   var OBSTACLES = [{ x: -1.9, z: -0.5, r: 1.35, active: true }];
 
+  // Drei Bereiche: der Laden, der Garten hinter dem Haus (sobald dort etwas
+  // gekauft ist) und die Strasse, die nur Passanten gehoert. Wer zwischen
+  // Laden und Garten wechselt, geht durch die Hintertuer statt durch die Wand.
+  var TUER_H_X = (TUER_HINTEN.x0 + TUER_HINTEN.x1) / 2;
+  var TUER_V_X = (TUER_VORNE.x0 + TUER_VORNE.x1) / 2;
+
+  function imGarten(z) { return z < -ROOM_D / 2; }
+  function gartenOffen() { return outdoor || meadowBought; }
+
   function clampToRoom(x, z) {
+    if (imGarten(z) && gartenOffen()) {
+      var breit = meadowBought ? FELD.x1 - 0.5 : ROOM_W / 2 - 0.5;
+      var tief = meadowBought ? FELD.z1 + 0.6 : TERRASSE.z1 + 0.6;
+      return {
+        x: Math.max(-breit, Math.min(breit, x)),
+        z: Math.max(tief, Math.min(-ROOM_D / 2 - 0.7, z))
+      };
+    }
     return {
-      x: Math.max(meadowBought ? MEADOW_X - 4.1 : -ROOM_W / 2 + 0.55,
-                  Math.min(ROOM_W / 2 - 0.55, x)),
-      z: Math.max(-ROOM_D / 2 + 0.85, Math.min(outdoor ? ROOM_D / 2 + 4.6 : ROOM_D / 2 - 0.85, z))
+      x: Math.max(-ROOM_W / 2 + 0.55, Math.min(ROOM_W / 2 - 0.55, x)),
+      z: Math.max(-ROOM_D / 2 + 0.85, Math.min(ROOM_D / 2 - 0.85, z))
     };
+  }
+
+  // Weg ueber eine Tuer: erst davor, dann dahinter, dann ans Ziel.
+  function tuerWeg(person, tuerX, wandZ, richtung, ziel) {
+    var davor = new THREE.Vector2(tuerX, wandZ - richtung * 0.7);
+    var dahinter = new THREE.Vector2(tuerX, wandZ + richtung * 0.8);
+    person.target = davor;
+    person.route = [dahinter, ziel];
+  }
+
+  function halt(person) {
+    person.target = null;
+    person.route = null;
   }
 
   function pushOutOfFurniture(p) {
@@ -2634,7 +3098,13 @@
 
   function walkTo(person, x, z) {
     var p = pushOutOfFurniture(clampToRoom(x, z));
-    person.target = new THREE.Vector2(p.x, p.z);
+    var ziel = new THREE.Vector2(p.x, p.z);
+    person.route = null;
+    if (imGarten(person.pos.y) !== imGarten(p.z)) {
+      tuerWeg(person, TUER_H_X, -ROOM_D / 2, imGarten(p.z) ? -1 : 1, ziel);
+    } else {
+      person.target = ziel;
+    }
   }
 
   function stepPerson(person, dt) {
@@ -2643,11 +3113,18 @@
       var dx = person.target.x - person.pos.x;
       var dz = person.target.y - person.pos.y;
       var dist = Math.hypot(dx, dz);
-      if (dist < 0.06) {
-        person.target = null;
-        person.speed = Math.max(0, person.speed - 7 * dt);
+      var weiter = person.route && person.route.length;
+      if (dist < (weiter ? 0.3 : 0.06)) {
+        if (weiter) {
+          person.target = person.route.shift();
+        } else {
+          person.target = null;
+          person.route = null;
+          person.speed = Math.max(0, person.speed - 7 * dt);
+        }
       } else {
-        var wanted = Math.min(person.maxSpeed, Math.sqrt(Math.max(0, 2 * 5.5 * (dist - 0.05))));
+        var wanted = weiter ? person.maxSpeed
+          : Math.min(person.maxSpeed, Math.sqrt(Math.max(0, 2 * 5.5 * (dist - 0.05))));
         person.speed += (wanted - person.speed) * Math.min(1, dt * 6);
         var heading = Math.atan2(dx, dz);
         var diff = ((heading - person.heading + Math.PI * 3) % (Math.PI * 2)) - Math.PI;
@@ -3029,7 +3506,7 @@
       if (nah || !leiterin.target) {
         var z = leiterZiel;
         leiterZiel = null;
-        leiterin.target = null;
+        halt(leiterin);
         leiterPause = 2.5;
         if (z.weg) {
           var infoW = z.weg.userData.pick;
@@ -3089,7 +3566,7 @@
           if (picked === lagerZiel) refreshTray();
         }
         lagerZiel = null;
-        lagerist.target = null;
+        halt(lagerist);
         lagerPause = 1.4;
       }
     }
@@ -3392,26 +3869,33 @@
     return bed;
   }
 
-  // ------------------------------------------------------------ Wiese nebenan
-  // Das Grundstueck links liegt von Anfang an da und traegt ein Schild. Gekauft
-  // wird es zum Anzuchtgarten: Zaun, Weg hinueber, vier Hochbeete. Die Grenze,
-  // bis zu der Lynn laufen darf, wandert mit - sonst stuende sie am Zaun an.
+  // ------------------------------------------------------- hinter dem Haus
+  // Vorne ist Strasse, also wird hinten angebaut. Zuerst das Gewaechshaus
+  // direkt an der Rueckwand, dahinter das Feld. Beides erreicht man durch die
+  // Hintertuer; die Grenze, bis zu der Lynn laufen darf, waechst mit.
   var meadowBought = false;
-  var MEADOW_X = -ROOM_W / 2 - 6.4;
   var meadowSign = null;
+  var TERRASSE = { z0: -ROOM_D / 2, z1: -ROOM_D / 2 - 5.4 };
+  var FELD = { x1: 8, z0: -ROOM_D / 2 - 6.2, z1: -ROOM_D / 2 - 17.6 };
+  var gartenWegGelegt = false;
+
+  function keinTreffer(obj) {
+    obj.traverse(function (k) { if (k.isMesh) k.raycast = function () {}; });
+    return obj;
+  }
 
   function placeMeadowSign() {
+    var sx = TUER_H_X + 1.6, sz = FELD.z0 - 0.4;
     var pfosten = new THREE.Mesh(
       new THREE.BoxGeometry(0.1, 1.5, 0.1),
       new THREE.MeshStandardMaterial({ color: '#7a5533', roughness: 0.85 })
     );
-    pfosten.position.set(-ROOM_W / 2 - 1.6, 0.75, 1.2);
+    pfosten.position.set(sx, 0.75, sz);
     var brett = new THREE.Mesh(
       new THREE.BoxGeometry(1.5, 0.62, 0.07),
       new THREE.MeshStandardMaterial({ color: '#efe4cd', roughness: 0.9 })
     );
-    brett.position.set(-ROOM_W / 2 - 1.6, 1.35, 1.2);
-    brett.rotation.y = 0.35;
+    brett.position.set(sx, 1.35, sz);
     meadowSign = new THREE.Group();
     meadowSign.add(pfosten);
     meadowSign.add(brett);
@@ -3425,7 +3909,7 @@
     g.fillStyle = '#3f5c3a';
     g.font = 'bold 30px Georgia, serif';
     g.textAlign = 'center';
-    g.fillText('Wiese', 128, 44);
+    g.fillText('Bauland', 128, 44);
     g.font = 'bold 22px Georgia, serif';
     g.fillText('zu verkaufen', 128, 78);
     var t = new THREE.CanvasTexture(c);
@@ -3434,82 +3918,135 @@
       new THREE.PlaneGeometry(1.42, 0.58),
       new THREE.MeshBasicMaterial({ map: t })
     );
-    schrift.position.set(-ROOM_W / 2 - 1.6 + Math.sin(0.35) * 0.04, 1.35,
-                         1.2 + Math.cos(0.35) * 0.04);
-    schrift.rotation.y = 0.35;
+    schrift.position.set(sx, 1.35, sz + 0.04);
     meadowSign.add(schrift);
   }
+
+  // Pflasterweg von der Hintertuer nach hinten - einmal, egal was zuerst
+  // gekauft wird.
+  function pflaster(breite, laenge, x, z, y) {
+    var weg = new THREE.Mesh(new THREE.PlaneGeometry(breite, laenge),
+      paintedMaterial('boden-weg', breite / 1.0, laenge / 1.0, '#8d9a86', { roughness: 1 }));
+    weg.rotation.x = -Math.PI / 2;
+    weg.position.set(x, y, z);
+    weg.receiveShadow = true;
+    weg.userData.boden = true;
+    scene.add(weg);
+    return weg;
+  }
+
+  function gartenWeg(bis) {
+    var laenge = -ROOM_D / 2 - bis;
+    pflaster(1.7, laenge, TUER_H_X, -ROOM_D / 2 - laenge / 2, -0.035);
+  }
+
+  // Erst hier, weil das Schild auf FELD steht - weiter oben gibt es das noch nicht.
+  placeMeadowSign();
 
   function openMeadow() {
     if (meadowBought) return;
     meadowBought = true;
     if (meadowSign) scene.remove(meadowSign);
-    raeumeHeckeLinks(-7);
+    oeffneHintertuer();
+    gartenWeg(FELD.z1 + 0.4);
 
+    // Lattenzaun ums Feld, vorne eine Luecke fuer den Weg
     var zaunMat = new THREE.MeshStandardMaterial({ color: '#c9b48d', roughness: 0.9 });
-    // Lattenzaun um das Grundstueck, Luecke zum Laden hin
-    for (var i = 0; i <= 22; i++) {
-      var t = i / 22;
-      [[MEADOW_X - 4.6 + t * 9.2, -5.2], [MEADOW_X - 4.6 + t * 9.2, 5.2]].forEach(function (p) {
-        var latte = new THREE.Mesh(new THREE.BoxGeometry(0.09, 0.95, 0.09), zaunMat);
-        latte.position.set(p[0], 0.47, p[1]);
-        latte.castShadow = false;
-        latte.receiveShadow = true;
-        scene.add(latte);
-      });
+    var zaunTeile = [];
+    var latte = new THREE.BoxGeometry(0.09, 0.95, 0.09);
+    function zaun(x0, z0, x1, z1, luecke) {
+      var laenge = Math.hypot(x1 - x0, z1 - z0);
+      var stueck = Math.ceil(laenge / 0.42);
+      for (var i = 0; i <= stueck; i++) {
+        var x = x0 + (x1 - x0) * i / stueck;
+        var z = z0 + (z1 - z0) * i / stueck;
+        if (luecke && x > luecke[0] && x < luecke[1]) continue;
+        zaunTeile.push({ geo: latte, matrix: lage(x, 0.47, z), farbe: '#c9b48d' });
+      }
+      // Querlatte
+      var mx = (x0 + x1) / 2, mz = (z0 + z1) / 2;
+      var ry = Math.atan2(x1 - x0, z1 - z0);
+      if (!luecke) {
+        zaunTeile.push({ geo: new THREE.BoxGeometry(0.05, 0.08, laenge), matrix: lage(mx, 0.72, mz, ry), farbe: '#b59f78' });
+      }
     }
-    for (var k = 0; k <= 24; k++) {
-      var u = k / 24;
-      var z = -5.2 + u * 10.4;
-      if (z > -1.4 && z < 2.6) continue;          // Durchgang zum Laden
-      var latte2 = new THREE.Mesh(new THREE.BoxGeometry(0.09, 0.95, 0.09), zaunMat);
-      latte2.position.set(MEADOW_X - 4.6, 0.47, z);
-      latte2.castShadow = false;
-      latte2.receiveShadow = true;
-      scene.add(latte2);
-    }
+    zaun(-FELD.x1, FELD.z0, FELD.x1, FELD.z0, [TUER_H_X - 1.1, TUER_H_X + 1.1]);
+    zaun(-FELD.x1, FELD.z1, FELD.x1, FELD.z1);
+    zaun(-FELD.x1, FELD.z0, -FELD.x1, FELD.z1);
+    zaun(FELD.x1, FELD.z0, FELD.x1, FELD.z1);
+    var zaunMesh = new THREE.Mesh(verschmelze(zaunTeile),
+      new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.9 }));
+    zaunMesh.receiveShadow = true;
+    scene.add(keinTreffer(zaunMesh));
 
-    var weg = new THREE.Mesh(new THREE.PlaneGeometry(4.4, 2.0), pathMat.clone());
-    weg.rotation.x = -Math.PI / 2;
-    weg.position.set(-ROOM_W / 2 - 1.9, -0.03, 0.6);
-    weg.receiveShadow = true;
-    scene.add(weg);
+    // Querweg zu den Beeten
+    pflaster(TUER_H_X + 6.4, 1.4, (TUER_H_X - 6.4) / 2, (FELD.z0 + FELD.z1) / 2, -0.034);
 
-    buildBed(MEADOW_X - 2.2, -2.6, 'Wiesenbeet 1');
-    buildBed(MEADOW_X + 2.2, -2.6, 'Wiesenbeet 2');
-    buildBed(MEADOW_X - 2.2, 2.8, 'Wiesenbeet 3');
-    buildBed(MEADOW_X + 2.2, 2.8, 'Wiesenbeet 4');
-    guestSpots.push({ x: MEADOW_X, z: 0 }, { x: MEADOW_X - 2.2, z: -0.6 });
-    say('Die Wiese gehört dir – vier Hochbeete stehen bereit.');
+    var mz = (FELD.z0 + FELD.z1) / 2;
+    buildBed(-4.6, mz + 2.6, 'Feldbeet 1');
+    buildBed(-0.6, mz + 2.6, 'Feldbeet 2');
+    buildBed(-4.6, mz - 2.6, 'Feldbeet 3');
+    buildBed(-0.6, mz - 2.6, 'Feldbeet 4');
+    guestSpots.push({ x: -2.6, z: mz + 0.1 }, { x: TUER_H_X - 1.2, z: mz + 2.6 });
+    say('Das Feld hinterm Haus gehört dir – vier Hochbeete stehen bereit.');
   }
-
+  // Das Gewaechshaus lehnt an der Rueckwand: Holzdeck, schlanke Pfosten, ein
+  // Pultdach aus Glas, das von der Wand nach hinten abfaellt. Das Glas faengt
+  // keine Tipps ab, sonst liessen sich die Beete darunter nicht antippen.
   function openGreenhouse() {
     outdoor = true;
-    for (var i = 0; i < walls.length; i++) {
-      if (walls[i].group === wallFront) { walls.splice(i, 1); break; }
-    }
-    scene.remove(wallFront);
+    oeffneHintertuer();
+    if (!meadowBought) gartenWeg(TERRASSE.z1 - 0.2);
+    var tiefe = TERRASSE.z0 - TERRASSE.z1;
+    var mitteZ = (TERRASSE.z0 + TERRASSE.z1) / 2;
 
-    var deck = new THREE.Mesh(new THREE.BoxGeometry(ROOM_W, 0.05, 5.4), woodMat);
-    deck.position.set(0, 0.024, ROOM_D / 2 + 2.6);
+    var deck = new THREE.Mesh(new THREE.BoxGeometry(ROOM_W, 0.05, tiefe), woodMat);
+    deck.position.set(0, 0.024, mitteZ);
     deck.receiveShadow = true;
+    deck.userData.boden = true;
     scene.add(deck);
 
-    var railMat = new THREE.MeshStandardMaterial({ color: '#8a6440', roughness: 0.85 });
-    [-ROOM_W / 2 + 0.1, ROOM_W / 2 - 0.1].forEach(function (x) {
-      var rail = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.7, 5.4), railMat);
-      rail.position.set(x, 0.35, ROOM_D / 2 + 2.6);
-      rail.castShadow = rail.receiveShadow = true;
-      scene.add(rail);
+    var rahmen = [];
+    var pfosten = new THREE.BoxGeometry(0.09, 1, 0.09);
+    var hochW = WALL_H - 0.2, hochH = 2.45;
+    function hoeheBei(z) { return hochW + (hochH - hochW) * (TERRASSE.z0 - z) / tiefe; }
+    for (var px = -ROOM_W / 2 + 0.05; px <= ROOM_W / 2; px += ROOM_W / 4 - 0.025) {
+      rahmen.push({ geo: pfosten, matrix: lage(px, hochH / 2, TERRASSE.z1 + 0.05, 0, 1, hochH, 1), farbe: '#f1ece0' });
+    }
+    [-ROOM_W / 2 + 0.05, ROOM_W / 2 - 0.05].forEach(function (px) {
+      [TERRASSE.z0 - 0.05, mitteZ].forEach(function (pz) {
+        var h = hoeheBei(pz);
+        rahmen.push({ geo: pfosten, matrix: lage(px, h / 2, pz, 0, 1, h, 1), farbe: '#f1ece0' });
+      });
     });
-    var frontRail = new THREE.Mesh(new THREE.BoxGeometry(ROOM_W, 0.7, 0.12), railMat);
-    frontRail.position.set(0, 0.35, ROOM_D / 2 + 5.24);
-    frontRail.castShadow = frontRail.receiveShadow = true;
-    scene.add(frontRail);
+    var schraeg = Math.atan2(hochW - hochH, tiefe);
+    var dachLang = Math.hypot(tiefe, hochW - hochH);
+    for (var sx = -ROOM_W / 2 + 0.05; sx <= ROOM_W / 2; sx += ROOM_W / 8 - 0.0125) {
+      var sprosse = new THREE.BoxGeometry(0.06, 0.06, dachLang);
+      var m = lage(sx, (hochW + hochH) / 2, mitteZ);
+      m.multiply(new THREE.Matrix4().makeRotationX(-schraeg));
+      rahmen.push({ geo: sprosse, matrix: m, farbe: '#f1ece0' });
+    }
+    var rahmenMesh = new THREE.Mesh(verschmelze(rahmen),
+      new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.6 }));
+    rahmenMesh.castShadow = true;
+    scene.add(keinTreffer(rahmenMesh));
 
-    buildBed(-2.7, ROOM_D / 2 + 2.2, 'Beet links');
-    buildBed(2.7, ROOM_D / 2 + 2.2, 'Beet rechts');
-    guestSpots.push({ x: -2.6, z: ROOM_D / 2 + 3.4 }, { x: 2.6, z: ROOM_D / 2 + 3.4 });
+    var glasMat = new THREE.MeshStandardMaterial({
+      color: '#e4f2ee', roughness: 0.08, transparent: true, opacity: 0.2,
+      depthWrite: false, side: THREE.DoubleSide
+    });
+    var dach = new THREE.Mesh(new THREE.PlaneGeometry(ROOM_W, dachLang), glasMat);
+    dach.position.set(0, (hochW + hochH) / 2, mitteZ);
+    dach.rotation.x = -Math.PI / 2 - schraeg;
+    scene.add(keinTreffer(dach));
+    var hinterGlas = new THREE.Mesh(new THREE.PlaneGeometry(ROOM_W, hochH), glasMat);
+    hinterGlas.position.set(0, hochH / 2, TERRASSE.z1 + 0.05);
+    scene.add(keinTreffer(hinterGlas));
+
+    buildBed(-3.2, mitteZ - 0.6, 'Glashausbeet links');
+    buildBed(0.2, mitteZ - 0.6, 'Glashausbeet rechts');
+    guestSpots.push({ x: -3.2, z: mitteZ + 0.9 }, { x: 0.2, z: mitteZ + 0.9 });
   }
 
   var candleMat = new THREE.MeshStandardMaterial({ color: '#f2e6cd', roughness: 0.6 });
@@ -3612,7 +4149,7 @@
       place: function () {
         // Nicht bei x = -0.4: dort sitzt seit dem Umbau das Fenster (x -1 bis 1).
         wallCard('bild1', -3.3, 2.35, -ROOM_D / 2 + 0.07, 0, 0.66);
-        wallCard('bild2', 3.5, 2.42, -ROOM_D / 2 + 0.07, 0, 0.72);
+        wallCard('bild2', 5.0, 2.2, -ROOM_D / 2 + 0.07, 0, 0.62);
         wallCard('bild2', -ROOM_W / 2 + 0.07, 2.3, 1.7, Math.PI / 2, 0.6);
         wallCard('bild1', ROOM_W / 2 - 0.07, 2.35, -1.2, -Math.PI / 2, 0.64);
       }
@@ -3704,7 +4241,7 @@
     },
     {
       id: 'torches', name: 'Gartenfackeln', cost: 40, cat: 'light',
-      note: 'Vier Fackeln am Weg, mit flackerndem Licht.',
+      note: 'Vier Fackeln am Gartenweg hinterm Haus, mit flackerndem Licht.',
       preview: function () {
         var group = new THREE.Group();
         var stab = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.035, 0.8, 8),
@@ -3719,8 +4256,8 @@
         return group;
       },
       place: function () {
-        [[-1.9, ROOM_D / 2 + 2.2], [1.9, ROOM_D / 2 + 2.2],
-         [-1.9, ROOM_D / 2 + 6.4], [1.9, ROOM_D / 2 + 6.4]].forEach(function (p) {
+        [[TUER_H_X - 1.3, -ROOM_D / 2 - 1.4], [TUER_H_X + 1.3, -ROOM_D / 2 - 1.4],
+         [TUER_H_X - 1.3, -ROOM_D / 2 - 5.9], [TUER_H_X + 1.3, -ROOM_D / 2 - 5.9]].forEach(function (p) {
           decorCard('fackel', p[0], p[1], 2.1, 0, false);
           addFlame(p[0], 1.9, p[1]);
         });
@@ -4370,17 +4907,17 @@
 
       if (buildGroup === 'rooms') {
         list.appendChild(offerRow('\u2302', 'Gew\u00e4chshaus draussen',
-          outdoor ? 'Die Terrasse ist offen.' : '\u00d6ffnet die Vorderseite auf eine Terrasse mit zwei Anzuchtbeeten.',
+          outdoor ? 'Das Gew\u00e4chshaus steht.' : 'Hinter dem Laden: Hintert\u00fcr auf, Holzdeck unter Glas, zwei Anzuchtbeete.',
           outdoor ? 'Gekauft' : '120 \u25cf', !outdoor && coins >= 120,
           function () {
             setCoins(coins - 120);
             openGreenhouse();
             renderShop();
-            say('Das Gew\u00e4chshaus ist offen \u2013 Lynn kann jetzt nach draussen.');
+            say('Das Gew\u00e4chshaus steht \u2013 Lynn geht durch die Hintert\u00fcr hinaus.');
           }));
-        list.appendChild(offerRow('\u2698', 'Wiese nebenan',
+        list.appendChild(offerRow('\u2698', 'Feld hinterm Haus',
           meadowBought ? 'Vier Hochbeete stehen bereit.'
-                       : 'Das Grundst\u00fcck links kaufen: Zaun, Weg und vier Hochbeete.',
+                       : 'Das Bauland hinter dem Laden: Zaun, Gartenweg und vier Hochbeete.',
           meadowBought ? 'Gekauft' : '180 \u25cf', !meadowBought && coins >= 180,
           function () {
             setCoins(coins - 180);
@@ -4500,11 +5037,16 @@
     if (!placing) return false;
     var p = placing.unit.group.position;
     if (placing.unit.wall) {
-      return Math.hypot(p.x + 3.1, p.z - 2.4) > 1.4 && Math.hypot(p.x - 3.4, p.z + ROOM_D / 2) > 1.5;
+      return Math.hypot(p.x + 3.1, p.z - 2.4) > 1.4 && Math.hypot(p.x - 3.4, p.z + ROOM_D / 2) > 1.5 &&
+        Math.hypot(p.x - TUER_V_X, p.z - ROOM_D / 2) > 1.3;
     }
     if (p.x < -ROOM_W / 2 + 0.9 || p.x > ROOM_W / 2 - 0.9) return false;
-    var zMax = outdoor ? ROOM_D / 2 + 4.2 : ROOM_D / 2 - 0.9;
-    if (p.z < -ROOM_D / 2 + 0.7 || p.z > zMax) return false;
+    var drinnen = p.z > -ROOM_D / 2 + 0.7 && p.z < ROOM_D / 2 - 0.9;
+    var glashaus = outdoor && p.z < -ROOM_D / 2 - 0.9 && p.z > TERRASSE.z1 + 0.7;
+    if (!drinnen && !glashaus) return false;
+    // Vor den Tueren bleibt der Weg frei
+    if (Math.abs(p.x - TUER_V_X) < 1.5 && p.z > ROOM_D / 2 - 2.2) return false;
+    if (Math.abs(p.x - TUER_H_X) < 1.4 && Math.abs(p.z + ROOM_D / 2) < 1.9) return false;
     for (var i = 0; i < OBSTACLES.length; i++) {
       var o = OBSTACLES[i];
       if (o.active === false) continue;
@@ -4861,6 +5403,8 @@
       if (!plant && obj.userData.owner) plant = obj.userData.owner;
       if (!shelf && obj.userData.shelf && obj.userData.shelf.built) shelf = obj.userData.shelf;
       if (!groundPoint && obj === floor) groundPoint = hits[i].point;
+      if (!groundPoint && gartenOffen() && (obj === pavement || obj.userData.boden) &&
+          imGarten(hits[i].point.z)) groundPoint = hits[i].point;
       if (!placing && !movingPlant && obj.userData.pc) { openShop(); return; }
     }
 
@@ -5023,6 +5567,7 @@
 
     updatePlantCards();
     updateDecorCards();
+    updateHaeuser(dt);
     updateBulbs(now);
     updateFlames(now);
     for (var cc = 0; cc < candleCards.length; cc++) {
