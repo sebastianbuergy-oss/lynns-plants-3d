@@ -441,7 +441,7 @@
   <!-- Die Versionsnummer steht sichtbar da, weil Safari die Seite gecacht hat
        und eine alte Fassung als "immer noch kaputt" durchging. Bei jeder
        Aenderung hochzaehlen. -->
-  <div class="mark"><b>Lynn's Plants</b><span>3D PROTOTYP &middot; V28</span></div>
+  <div class="mark"><b>Lynn's Plants</b><span>3D PROTOTYP &middot; V31</span></div>
   <button class="coins" id="coinBtn" type="button"><i></i><b id="coinValue">1000</b><em>+</em></button>
 </header>
 
@@ -891,6 +891,21 @@
   hedge.castShadow = false;
   hedge.receiveShadow = true;
   scene.add(hedge);
+
+  // Kauft man die Wiese, muss die Hecke dort verschwinden - sie stuende sonst
+  // mitten im neuen Grundstueck. Die betroffenen Buesche werden auf Groesse
+  // null gesetzt; billiger, als die ganze Gruppe neu zu bauen.
+  function raeumeHeckeLinks(grenze) {
+    var m = new THREE.Matrix4();
+    var v = new THREE.Vector3();
+    var leer = new THREE.Matrix4().makeScale(0, 0, 0);
+    for (var i = 0; i < hedgeBushes.length; i++) {
+      hedge.getMatrixAt(i, m);
+      v.setFromMatrixPosition(m);
+      if (v.x < grenze) hedge.setMatrixAt(i, leer);
+    }
+    hedge.instanceMatrix.needsUpdate = true;
+  }
 
   // A faint darkening at the edges stands in for the shading a real corner
   // collects. Cheap, and it stops the floor reading as a flat sheet.
@@ -2186,6 +2201,7 @@
   });
 
   buildBulbs();
+  placeMeadowSign();
 
   // ---------------------------------------------------------------- persons
   function limb(mat, length, thickness) {
@@ -2552,7 +2568,8 @@
 
   function clampToRoom(x, z) {
     return {
-      x: Math.max(-ROOM_W / 2 + 0.55, Math.min(ROOM_W / 2 - 0.55, x)),
+      x: Math.max(meadowBought ? MEADOW_X - 4.1 : -ROOM_W / 2 + 0.55,
+                  Math.min(ROOM_W / 2 - 0.55, x)),
       z: Math.max(-ROOM_D / 2 + 0.85, Math.min(outdoor ? ROOM_D / 2 + 4.6 : ROOM_D / 2 - 0.85, z))
     };
   }
@@ -3094,6 +3111,97 @@
     return bed;
   }
 
+  // ------------------------------------------------------------ Wiese nebenan
+  // Das Grundstueck links liegt von Anfang an da und traegt ein Schild. Gekauft
+  // wird es zum Anzuchtgarten: Zaun, Weg hinueber, vier Hochbeete. Die Grenze,
+  // bis zu der Lynn laufen darf, wandert mit - sonst stuende sie am Zaun an.
+  var meadowBought = false;
+  var MEADOW_X = -ROOM_W / 2 - 6.4;
+  var meadowSign = null;
+
+  function placeMeadowSign() {
+    var pfosten = new THREE.Mesh(
+      new THREE.BoxGeometry(0.1, 1.5, 0.1),
+      new THREE.MeshStandardMaterial({ color: '#7a5533', roughness: 0.85 })
+    );
+    pfosten.position.set(-ROOM_W / 2 - 1.6, 0.75, 1.2);
+    var brett = new THREE.Mesh(
+      new THREE.BoxGeometry(1.5, 0.62, 0.07),
+      new THREE.MeshStandardMaterial({ color: '#efe4cd', roughness: 0.9 })
+    );
+    brett.position.set(-ROOM_W / 2 - 1.6, 1.35, 1.2);
+    brett.rotation.y = 0.35;
+    meadowSign = new THREE.Group();
+    meadowSign.add(pfosten);
+    meadowSign.add(brett);
+    markShadow(meadowSign, true);
+    scene.add(meadowSign);
+
+    var c = document.createElement('canvas');
+    c.width = 256; c.height = 106;
+    var g = c.getContext('2d');
+    g.fillStyle = '#efe4cd'; g.fillRect(0, 0, 256, 106);
+    g.fillStyle = '#3f5c3a';
+    g.font = 'bold 30px Georgia, serif';
+    g.textAlign = 'center';
+    g.fillText('Wiese', 128, 44);
+    g.font = 'bold 22px Georgia, serif';
+    g.fillText('zu verkaufen', 128, 78);
+    var t = new THREE.CanvasTexture(c);
+    t.encoding = THREE.sRGBEncoding;
+    var schrift = new THREE.Mesh(
+      new THREE.PlaneGeometry(1.42, 0.58),
+      new THREE.MeshBasicMaterial({ map: t })
+    );
+    schrift.position.set(-ROOM_W / 2 - 1.6 + Math.sin(0.35) * 0.04, 1.35,
+                         1.2 + Math.cos(0.35) * 0.04);
+    schrift.rotation.y = 0.35;
+    meadowSign.add(schrift);
+  }
+
+  function openMeadow() {
+    if (meadowBought) return;
+    meadowBought = true;
+    if (meadowSign) scene.remove(meadowSign);
+    raeumeHeckeLinks(-7);
+
+    var zaunMat = new THREE.MeshStandardMaterial({ color: '#c9b48d', roughness: 0.9 });
+    // Lattenzaun um das Grundstueck, Luecke zum Laden hin
+    for (var i = 0; i <= 22; i++) {
+      var t = i / 22;
+      [[MEADOW_X - 4.6 + t * 9.2, -5.2], [MEADOW_X - 4.6 + t * 9.2, 5.2]].forEach(function (p) {
+        var latte = new THREE.Mesh(new THREE.BoxGeometry(0.09, 0.95, 0.09), zaunMat);
+        latte.position.set(p[0], 0.47, p[1]);
+        latte.castShadow = false;
+        latte.receiveShadow = true;
+        scene.add(latte);
+      });
+    }
+    for (var k = 0; k <= 24; k++) {
+      var u = k / 24;
+      var z = -5.2 + u * 10.4;
+      if (z > -1.4 && z < 2.6) continue;          // Durchgang zum Laden
+      var latte2 = new THREE.Mesh(new THREE.BoxGeometry(0.09, 0.95, 0.09), zaunMat);
+      latte2.position.set(MEADOW_X - 4.6, 0.47, z);
+      latte2.castShadow = false;
+      latte2.receiveShadow = true;
+      scene.add(latte2);
+    }
+
+    var weg = new THREE.Mesh(new THREE.PlaneGeometry(4.4, 2.0), pathMat.clone());
+    weg.rotation.x = -Math.PI / 2;
+    weg.position.set(-ROOM_W / 2 - 1.9, -0.03, 0.6);
+    weg.receiveShadow = true;
+    scene.add(weg);
+
+    buildBed(MEADOW_X - 2.2, -2.6, 'Wiesenbeet 1');
+    buildBed(MEADOW_X + 2.2, -2.6, 'Wiesenbeet 2');
+    buildBed(MEADOW_X - 2.2, 2.8, 'Wiesenbeet 3');
+    buildBed(MEADOW_X + 2.2, 2.8, 'Wiesenbeet 4');
+    guestSpots.push({ x: MEADOW_X, z: 0 }, { x: MEADOW_X - 2.2, z: -0.6 });
+    say('Die Wiese gehört dir – vier Hochbeete stehen bereit.');
+  }
+
   function openGreenhouse() {
     outdoor = true;
     for (var i = 0; i < walls.length; i++) {
@@ -3292,6 +3400,26 @@
       place: function () {
         wallCard('spiegel', -1.9, 2.15, -ROOM_D / 2 + 0.07, 0, 0.88);
       }
+    },
+    {
+      id: 'meadow-unused', name: 'Wiese nebenan', cost: 180, cat: 'none',
+      note: 'Grundstueck links kaufen: Zaun, Weg und vier Hochbeete.',
+      preview: function () {
+        var group = new THREE.Group();
+        var gras = new THREE.Mesh(
+          new THREE.BoxGeometry(1.1, 0.08, 0.8),
+          new THREE.MeshStandardMaterial({ color: '#6d8a52', roughness: 1 })
+        );
+        gras.position.y = 0.04;
+        group.add(gras);
+        [-0.4, 0.4].forEach(function (x) {
+          var beet = new THREE.Mesh(new THREE.BoxGeometry(0.38, 0.14, 0.3), woodMat);
+          beet.position.set(x, 0.15, 0);
+          group.add(beet);
+        });
+        return group;
+      },
+      place: function () { openMeadow(); }
     },
     {
       id: 'led', name: 'LED-Kette mit Farbwechsel', cost: 44, cat: 'light',
@@ -3770,6 +3898,15 @@
             openGreenhouse();
             renderShop();
             say('Das Gew\u00e4chshaus ist offen \u2013 Lynn kann jetzt nach draussen.');
+          }));
+        list.appendChild(offerRow('\u2698', 'Wiese nebenan',
+          meadowBought ? 'Vier Hochbeete stehen bereit.'
+                       : 'Das Grundst\u00fcck links kaufen: Zaun, Weg und vier Hochbeete.',
+          meadowBought ? 'Gekauft' : '180 \u25cf', !meadowBought && coins >= 180,
+          function () {
+            setCoins(coins - 180);
+            openMeadow();
+            renderShop();
           }));
         return;
       }
