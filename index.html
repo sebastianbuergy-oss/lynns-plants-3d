@@ -441,7 +441,7 @@
   <!-- Die Versionsnummer steht sichtbar da, weil Safari die Seite gecacht hat
        und eine alte Fassung als "immer noch kaputt" durchging. Bei jeder
        Aenderung hochzaehlen. -->
-  <div class="mark"><b>Lynn's Plants</b><span>3D PROTOTYP &middot; V31</span></div>
+  <div class="mark"><b>Lynn's Plants</b><span>3D PROTOTYP &middot; V32</span></div>
   <button class="coins" id="coinBtn" type="button"><i></i><b id="coinValue">1000</b><em>+</em></button>
 </header>
 
@@ -2020,6 +2020,30 @@
     });
   }
 
+  // Fackeln bekommen ein eigenes Licht, das unregelmaessig zuckt. Ein
+  // gleichmaessiges Pulsieren liest sich als Technik, eine Flamme ist nie im
+  // Takt - deshalb drei ueberlagerte Schwingungen mit krummen Perioden.
+  var flames = [];
+
+  function addFlame(x, y, z) {
+    var licht = new THREE.PointLight('#ff9a3c', 0.9, 5.5, 2);
+    licht.position.set(x, y, z);
+    scene.add(licht);
+    flames.push({ licht: licht, grund: 0.9, versatz: Math.random() * 9 });
+  }
+
+  function updateFlames(now) {
+    for (var i = 0; i < flames.length; i++) {
+      var f = flames[i];
+      var t = now / 1000 + f.versatz;
+      var zucken = 0.72
+        + Math.sin(t * 7.3) * 0.15
+        + Math.sin(t * 13.7) * 0.09
+        + Math.sin(t * 23.1) * 0.05;
+      f.licht.intensity = f.grund * zucken;
+    }
+  }
+
   var kartenAbstand = new THREE.Vector3();
 
   function updateDecorCards() {
@@ -3422,6 +3446,79 @@
       place: function () { openMeadow(); }
     },
     {
+      id: 'torches', name: 'Gartenfackeln', cost: 40, cat: 'light',
+      note: 'Vier Fackeln am Weg, mit flackerndem Licht.',
+      preview: function () {
+        var group = new THREE.Group();
+        var stab = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.035, 0.8, 8),
+          new THREE.MeshStandardMaterial({ color: '#c2a06a', roughness: 0.9 }));
+        stab.position.y = 0.4;
+        group.add(stab);
+        var flamme = new THREE.Mesh(new THREE.SphereGeometry(0.09, 10, 8),
+          new THREE.MeshBasicMaterial({ color: '#ff8a3c' }));
+        flamme.scale.y = 1.6;
+        flamme.position.y = 0.9;
+        group.add(flamme);
+        return group;
+      },
+      place: function () {
+        [[-1.9, ROOM_D / 2 + 2.2], [1.9, ROOM_D / 2 + 2.2],
+         [-1.9, ROOM_D / 2 + 6.4], [1.9, ROOM_D / 2 + 6.4]].forEach(function (p) {
+          decorCard('fackel', p[0], p[1], 2.1, 0, false);
+          addFlame(p[0], 1.9, p[1]);
+        });
+      }
+    },
+    {
+      id: 'lantern', name: 'Marokkanische Laterne', cost: 26, cat: 'light',
+      note: 'Buntes Glas neben der Theke.',
+      preview: function () {
+        var g2 = new THREE.Group();
+        var koerper = new THREE.Mesh(new THREE.CylinderGeometry(0.16, 0.2, 0.42, 8),
+          new THREE.MeshStandardMaterial({ color: '#c2452f', roughness: 0.5 }));
+        koerper.position.y = 0.24;
+        g2.add(koerper);
+        return g2;
+      },
+      place: function () {
+        decorCard('laterne', -0.5, 0.6, 0.62, 0, false);
+        addFlame(-0.5, 0.5, 0.6);
+      }
+    },
+    {
+      id: 'flowerbox', name: 'Blumenkasten am Fenster', cost: 24, cat: 'plants',
+      note: 'Rote Geranien unter dem Fenster.',
+      preview: function () {
+        var g3 = new THREE.Group();
+        var kasten = new THREE.Mesh(new THREE.BoxGeometry(0.8, 0.2, 0.24), woodMat);
+        kasten.position.y = 0.1;
+        g3.add(kasten);
+        return g3;
+      },
+      place: function () {
+        wallCard('blumenkasten', 0, 1.16, -ROOM_D / 2 + 0.22, 0, 0.6);
+      }
+    },
+    {
+      id: 'bunting', name: 'Wimpelkette', cost: 20, cat: 'wall',
+      note: 'Bunte Wimpel über dem Eingang.',
+      preview: function () {
+        var g4 = new THREE.Group();
+        ['#d94f4f', '#e8b23c', '#4f8bd9', '#63b05a'].forEach(function (c, i) {
+          var w = new THREE.Mesh(new THREE.ConeGeometry(0.09, 0.2, 3),
+            new THREE.MeshStandardMaterial({ color: c, roughness: 0.9 }));
+          w.rotation.x = Math.PI;
+          w.position.set(-0.36 + i * 0.24, 0.1, 0);
+          g4.add(w);
+        });
+        return g4;
+      },
+      place: function () {
+        wallCard('wimpel', -2.6, 2.62, -ROOM_D / 2 + 0.09, 0, 0.62);
+        wallCard('wimpel', 2.6, 2.62, -ROOM_D / 2 + 0.09, 0, 0.62);
+      }
+    },
+    {
       id: 'led', name: 'LED-Kette mit Farbwechsel', cost: 44, cat: 'light',
       note: 'Ruestet alle Lichterketten auf langsam wandernde Farben um.',
       preview: function () {
@@ -4507,6 +4604,7 @@
     updatePlantCards();
     updateDecorCards();
     updateBulbs(now);
+    updateFlames(now);
     for (var cc = 0; cc < candleCards.length; cc++) {
       var karte = candleCards[cc];
       if (!karte.parent) continue;
