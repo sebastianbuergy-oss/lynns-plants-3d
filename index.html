@@ -439,7 +439,7 @@
   <!-- Die Versionsnummer steht sichtbar da, weil Safari die Seite gecacht hat
        und eine alte Fassung als "immer noch kaputt" durchging. Bei jeder
        Aenderung hochzaehlen. -->
-  <div class="mark"><b>Lynn's Plants</b><span>3D PROTOTYP &middot; V19</span></div>
+  <div class="mark"><b>Lynn's Plants</b><span>3D PROTOTYP &middot; V22</span></div>
   <button class="coins" id="coinBtn" type="button"><i></i><b id="coinValue">1000</b><em>+</em></button>
 </header>
 
@@ -1922,6 +1922,24 @@
     });
   }
 
+  function wallCard(bild, x, y, z, rotY, hoehe) {
+    texLoader.load(ART + 'decor/' + bild + '.webp', function (t) {
+      t.encoding = THREE.sRGBEncoding;
+      t.minFilter = THREE.LinearFilter;
+      t.generateMipmaps = false;
+      var karte = new THREE.Mesh(
+        new THREE.PlaneGeometry(hoehe * (t.image.width / t.image.height), hoehe),
+        new THREE.MeshBasicMaterial({
+          map: t, transparent: true, alphaTest: 0.3, side: THREE.DoubleSide
+        })
+      );
+      karte.position.set(x, y, z);
+      karte.rotation.y = rotY;
+      karte.renderOrder = 1;
+      scene.add(karte);
+    });
+  }
+
   function updateDecorCards() {
     for (var i = 0; i < decorCards.length; i++) {
       var k = decorCards[i];
@@ -2043,19 +2061,7 @@
     scene.add(crate);
   });
 
-  var can = new THREE.Group();
-  var canBody = new THREE.Mesh(new THREE.CylinderGeometry(0.13, 0.115, 0.24, 12),
-    new THREE.MeshStandardMaterial({ color: '#7f9a86', roughness: 0.55, metalness: 0.25 }));
-  canBody.position.y = 0.12;
-  can.add(canBody);
-  var spout = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.045, 0.34, 8),
-    new THREE.MeshStandardMaterial({ color: '#7f9a86', roughness: 0.55, metalness: 0.25 }));
-  spout.position.set(0.17, 0.19, 0);
-  spout.rotation.z = -0.8;
-  can.add(spout);
-  can.position.set(-2.3, 0, 1.6);
-  markShadow(can);
-  scene.add(can);
+  decorCard('giesskanne', -2.3, 1.6, 0.3, 0, false);
 
   // ---------------------------------------------------------------- persons
   function limb(mat, length, thickness) {
@@ -2994,18 +3000,29 @@
   var candleMat = new THREE.MeshStandardMaterial({ color: '#f2e6cd', roughness: 0.6 });
   var flameMat = new THREE.MeshBasicMaterial({ color: '#ffca6a' });
 
+  // Die Kerzen stehen auf der Theke und drehen sich mit der Kamera. Weil sie
+  // Teil der Thekengruppe sind, wird die Drehung ueber die Elternkette
+  // herausgerechnet - sonst kippen sie mit dem Moebel.
+  var candleCards = [];
+
   function candleCluster() {
     var group = new THREE.Group();
-    [[0, 0, 0.17], [0.16, 0.04, 0.13], [-0.15, -0.03, 0.11]].forEach(function (c) {
-      var stick = new THREE.Mesh(new THREE.CylinderGeometry(0.045, 0.05, c[2], 10), candleMat);
-      stick.position.set(c[0], c[2] / 2, c[1]);
-      group.add(stick);
-      var flame = new THREE.Mesh(new THREE.SphereGeometry(0.025, 8, 6), flameMat);
-      flame.scale.y = 1.7;
-      flame.position.set(c[0], c[2] + 0.04, c[1]);
-      group.add(flame);
+    texLoader.load(ART + 'decor/kerzen.webp', function (t) {
+      t.encoding = THREE.sRGBEncoding;
+      t.minFilter = THREE.LinearFilter;
+      t.generateMipmaps = false;
+      var h = 0.24;
+      var karte = new THREE.Mesh(
+        new THREE.PlaneGeometry(h * (t.image.width / t.image.height), h),
+        new THREE.MeshBasicMaterial({
+          map: t, transparent: true, alphaTest: 0.3, side: THREE.DoubleSide
+        })
+      );
+      karte.position.y = h / 2;
+      karte.renderOrder = 1;
+      group.add(karte);
+      candleCards.push(karte);
     });
-    markShadow(group);
     return group;
   }
 
@@ -3078,10 +3095,11 @@
         return group;
       },
       place: function () {
-        wallArt(-0.4, 2.35, -ROOM_D / 2 + 0.05, 0, 0.8, 0.62, '#d7e4c4', wallBack);
-        wallArt(3.5, 2.45, -ROOM_D / 2 + 0.05, 0, 0.56, 0.7, '#cfe0bd', wallBack);
-        wallArt(-ROOM_W / 2 + 0.05, 2.3, 1.7, Math.PI / 2, 0.66, 0.5, '#dbe6c9', wallLeft);
-        wallArt(ROOM_W / 2 - 0.05, 2.35, -1.2, -Math.PI / 2, 0.6, 0.62, '#dbe6c9', wallRight);
+        // Nicht bei x = -0.4: dort sitzt seit dem Umbau das Fenster (x -1 bis 1).
+        wallCard('bild1', -3.3, 2.35, -ROOM_D / 2 + 0.07, 0, 0.66);
+        wallCard('bild2', 3.5, 2.42, -ROOM_D / 2 + 0.07, 0, 0.72);
+        wallCard('bild2', -ROOM_W / 2 + 0.07, 2.3, 1.7, Math.PI / 2, 0.6);
+        wallCard('bild1', ROOM_W / 2 - 0.07, 2.35, -1.2, -Math.PI / 2, 0.64);
       }
     },
     {
@@ -3146,15 +3164,7 @@
         return group;
       },
       place: function () {
-        var ring = new THREE.Mesh(new THREE.TorusGeometry(0.42, 0.05, 10, 28),
-          new THREE.MeshStandardMaterial({ color: '#8a6a45', roughness: 0.6 }));
-        ring.position.set(-1.9, 2.15, -ROOM_D / 2 + 0.08);
-        var glass = new THREE.Mesh(new THREE.CircleGeometry(0.4, 30),
-          new THREE.MeshStandardMaterial({ color: '#cfdbd6', roughness: 0.15, metalness: 0.6 }));
-        glass.position.set(-1.9, 2.15, -ROOM_D / 2 + 0.09);
-        ring.castShadow = true;
-        wallBack.add(ring);
-        wallBack.add(glass);
+        wallCard('spiegel', -1.9, 2.15, -ROOM_D / 2 + 0.07, 0, 0.88);
       }
     },
     {
@@ -4022,6 +4032,15 @@
 
     updatePlantCards();
     updateDecorCards();
+    for (var cc = 0; cc < candleCards.length; cc++) {
+      var karte = candleCards[cc];
+      if (!karte.parent) continue;
+      karte.getWorldPosition(cardPos);
+      cardQuat.setFromAxisAngle(cardUp, Math.atan2(
+        camera.position.x - cardPos.x, camera.position.z - cardPos.z));
+      karte.parent.getWorldQuaternion(cardParent);
+      karte.quaternion.copy(cardParent.invert()).multiply(cardQuat);
+    }
 
     for (var b = 0; b < billboards.length; b++) {
       var bb = billboards[b];
