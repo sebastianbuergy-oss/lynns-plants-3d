@@ -411,7 +411,7 @@
   <!-- Die Versionsnummer steht sichtbar da, weil Safari die Seite gecacht hat
        und eine alte Fassung als "immer noch kaputt" durchging. Bei jeder
        Aenderung hochzaehlen. -->
-  <div class="mark"><b>Lynn's Plants</b><span>3D PROTOTYP &middot; V7</span></div>
+  <div class="mark"><b>Lynn's Plants</b><span>3D PROTOTYP &middot; V9</span></div>
   <button class="coins" id="coinBtn" type="button"><i></i><b id="coinValue">1000</b><em>+</em></button>
 </header>
 
@@ -1858,14 +1858,30 @@
   // ---------------------------------------------------------------- persons
   function limb(mat, length, thickness) {
     var g = new THREE.Group();
-    var m = new THREE.Mesh(new THREE.CylinderGeometry(thickness, thickness * 0.88, length, 8), mat);
+    var m = new THREE.Mesh(new THREE.CylinderGeometry(thickness, thickness * 0.88, length, 12), mat);
     m.position.y = -length / 2;
     g.add(m);
-    var cap = new THREE.Mesh(new THREE.SphereGeometry(thickness * 0.95, 8, 6), mat);
+    var cap = new THREE.Mesh(new THREE.SphereGeometry(thickness * 0.95, 10, 8), mat);
     cap.position.y = -length;
     g.add(cap);
     return g;
   }
+
+  // Beinmasse an einer Stelle. Die Beckenhoehe wird daraus jedes Bild neu
+  // gerechnet, deshalb darf keine dieser Zahlen irgendwo doppelt stehen.
+  var THIGH_LEN = 0.42;
+  var SHIN_LEN = 0.40;
+  var FOOT_Y = 0.02;      // Fussmitte unter dem Knoechel
+  var FOOT_Z = 0.048;     // Fussmitte vor dem Knoechel
+  var FOOT_H = 0.07;
+  var FOOT_L = 0.235;
+  var SOLE_REST = 0.005;  // Sohle steht knapp ueber dem Boden
+  var TAU = Math.PI * 2;
+  // Halber Schrittwinkel als Sinus. Daraus folgt die Schrittlaenge:
+  // 2 * (Oberschenkel + Schienbein) * STEP_SIN = 0.639 m pro Schritt, also
+  // 1.28 m pro Doppelschritt - genau der `stride`-Wert der Figuren. Stimmen
+  // die beiden nicht ueberein, rutschen die Fuesse.
+  var STEP_SIN = Math.sin(0.4);
 
   function buildPerson(look) {
     var skin = new THREE.MeshStandardMaterial({ color: look.skin, roughness: 0.78 });
@@ -1881,12 +1897,19 @@
 
     var torso = new THREE.Group();
     hips.add(torso);
+
+    // Zwischen Oberteil und Beinen klaffte nichts als Luft - der Rumpf endete
+    // als Rohr und die Beine begannen darunter. Ein Becken traegt beides.
+    var pelvis = new THREE.Mesh(new THREE.SphereGeometry(0.158, 16, 12), legMat);
+    pelvis.scale.set(1, 0.74, 0.86);
+    pelvis.position.y = -0.015;
+    hips.add(pelvis);
     var chest = new THREE.Mesh(new THREE.CylinderGeometry(0.19, 0.16, 0.56, 10), top);
     chest.position.y = 0.28;
     torso.add(chest);
-    var shoulders = new THREE.Mesh(new THREE.SphereGeometry(0.2, 10, 8), top);
-    shoulders.position.y = 0.54;
-    shoulders.scale.set(1, 0.62, 0.82);
+    var shoulders = new THREE.Mesh(new THREE.SphereGeometry(0.2, 14, 10), top);
+    shoulders.position.y = 0.52;
+    shoulders.scale.set(1, 0.55, 0.82);
     torso.add(shoulders);
 
     if (look.inner) {
@@ -1896,26 +1919,43 @@
       torso.add(placket);
     }
     if (look.apron) {
-      var apronMat = new THREE.MeshStandardMaterial({ color: look.apron, roughness: 0.9 });
-      var apron = new THREE.Mesh(new THREE.BoxGeometry(0.31, 0.46, 0.05), apronMat);
-      apron.position.set(0, 0.11, 0.16);
+      // Die Schuerze war eine flache Kiste, die vor dem Bauch in der Luft
+      // stand. Jetzt ist es ein gebogenes Stueck Stoff, das den Koerper
+      // umschliesst - nur vorne herum, hinten offen wie eine echte Schuerze.
+      var apronMat = new THREE.MeshStandardMaterial({
+        color: look.apron, roughness: 0.92, side: THREE.DoubleSide
+      });
+      var apron = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.185, 0.225, 0.44, 20, 1, true, -0.9, 1.8),
+        apronMat
+      );
+      apron.position.set(0, 0.12, 0.005);
       torso.add(apron);
-      var strap = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.3, 0.04), apronMat);
-      strap.position.set(0.09, 0.44, 0.15);
-      strap.rotation.z = 0.22;
-      torso.add(strap);
-      var strap2 = strap.clone();
-      strap2.position.x = -0.09;
-      strap2.rotation.z = -0.22;
-      torso.add(strap2);
+      var bib = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.175, 0.182, 0.2, 20, 1, true, -0.52, 1.04),
+        apronMat
+      );
+      bib.position.set(0, 0.42, 0.005);
+      torso.add(bib);
+      [-1, 1].forEach(function (s) {
+        var strap = new THREE.Mesh(new THREE.BoxGeometry(0.035, 0.22, 0.03), apronMat);
+        strap.position.set(s * 0.088, 0.53, 0.115);
+        strap.rotation.set(-0.24, 0, -s * 0.2);
+        torso.add(strap);
+      });
     }
 
-    var neck = new THREE.Mesh(new THREE.CylinderGeometry(0.055, 0.06, 0.1, 8), skin);
+    // Gemessen: die Schaedelunterkante lag 1.7 cm UNTER der Schulterkugel, vom
+    // zehn Zentimeter langen Hals war rechnerisch anderthalb Zentimeter zu
+    // sehen. Deshalb las sich die Figur als Schneemann. Schultern tiefer und
+    // flacher, Hals laenger, Kopf hoeher - jetzt bleiben knapp vier Zentimeter
+    // Hals sichtbar.
+    var neck = new THREE.Mesh(new THREE.CylinderGeometry(0.052, 0.062, 0.14, 10), skin);
     neck.position.y = 0.63;
     torso.add(neck);
 
     var head = new THREE.Group();
-    head.position.y = 0.68;
+    head.position.y = 0.7;
     torso.add(head);
     var skull = new THREE.Mesh(new THREE.SphereGeometry(0.135, 14, 12), skin);
     skull.scale.set(0.92, 1.06, 0.95);
@@ -1925,10 +1965,32 @@
     hair.scale.set(0.96, 1.02, 0.99);
     hair.position.y = 0.125;
     head.add(hair);
-    var face = new THREE.Mesh(new THREE.SphereGeometry(0.118, 12, 10), skin);
+    var face = new THREE.Mesh(new THREE.SphereGeometry(0.118, 14, 12), skin);
     face.scale.set(0.84, 0.9, 0.6);
     face.position.set(0, 0.1, 0.07);
     head.add(face);
+
+    // Beim Heranzoomen auf ein Regal steht die Figur gross im Bild und hatte
+    // bisher kein Gesicht. Zwei Augen und eine Braue reichen, damit sie als
+    // Person liest statt als Puppe - aus der Normalansicht sind sie kaum
+    // groesser als ein Punkt und stoeren nicht.
+    var eyeMat = new THREE.MeshStandardMaterial({ color: '#2a211c', roughness: 0.35 });
+    var browMat = new THREE.MeshStandardMaterial({ color: look.hair, roughness: 0.7 });
+    [-1, 1].forEach(function (s) {
+      var eye = new THREE.Mesh(new THREE.SphereGeometry(0.0155, 8, 6), eyeMat);
+      eye.position.set(s * 0.042, 0.115, 0.128);
+      head.add(eye);
+      var brow = new THREE.Mesh(new THREE.BoxGeometry(0.036, 0.008, 0.012), browMat);
+      brow.position.set(s * 0.043, 0.147, 0.122);
+      brow.rotation.z = -s * 0.12;
+      head.add(brow);
+    });
+
+    // Pony: ohne ihn sitzt die Haarkugel wie ein Helm auf dem Kopf.
+    var fringe = new THREE.Mesh(new THREE.SphereGeometry(0.138, 14, 12), hairMat);
+    fringe.scale.set(0.98, 0.62, 0.72);
+    fringe.position.set(0, 0.176, 0.028);
+    head.add(fringe);
     if (look.bun) {
       var bun = new THREE.Mesh(new THREE.SphereGeometry(0.072, 10, 8), hairMat);
       bun.position.set(0, 0.19, -0.11);
@@ -1943,15 +2005,25 @@
     var arms = [];
     [-1, 1].forEach(function (side) {
       var shoulder = new THREE.Group();
-      shoulder.position.set(side * 0.21, 0.5, 0);
+      // Das Drehgelenk sass genau am Rand der Schulterkugel, dadurch klaffte
+      // zwischen Schulter und Oberarm eine sichtbare Luecke. Jetzt sitzt es
+      // innerhalb, und eine Kappe im Stoff des Oberteils deckt die Naht.
+      shoulder.position.set(side * 0.172, 0.47, 0);
       torso.add(shoulder);
-      var upper = limb(top, 0.26, 0.055);
+      var socket = new THREE.Mesh(new THREE.SphereGeometry(0.068, 12, 10), top);
+      shoulder.add(socket);
+      var upper = limb(top, 0.26, 0.058);
       shoulder.add(upper);
       var elbow = new THREE.Group();
       elbow.position.y = -0.26;
       shoulder.add(elbow);
       var fore = limb(skin, 0.25, 0.048);
       elbow.add(fore);
+      // Ohne Haende endete der Arm in einer Kappe und wirkte abgeschnitten.
+      var hand = new THREE.Mesh(new THREE.SphereGeometry(0.055, 10, 8), skin);
+      hand.scale.set(0.78, 1.2, 0.62);
+      hand.position.y = -0.275;
+      elbow.add(hand);
       arms.push({ shoulder: shoulder, elbow: elbow, side: side });
     });
 
@@ -1960,17 +2032,28 @@
       var hip = new THREE.Group();
       hip.position.set(side * 0.095, 0, 0);
       hips.add(hip);
-      var thigh = limb(legMat, 0.42, 0.075);
+      var thigh = limb(legMat, THIGH_LEN, 0.075);
       hip.add(thigh);
       var knee = new THREE.Group();
-      knee.position.y = -0.42;
+      knee.position.y = -THIGH_LEN;
       hip.add(knee);
-      var shin = limb(legMat, 0.4, 0.06);
+      var shin = limb(legMat, SHIN_LEN, 0.06);
       knee.add(shin);
-      var foot = new THREE.Mesh(new THREE.BoxGeometry(0.11, 0.07, 0.24), shoeMat);
-      foot.position.set(0, -0.42, 0.05);
-      knee.add(foot);
-      legs.push({ hip: hip, knee: knee, side: side });
+      // Ein echtes Fussgelenk. Vorher hing der Fuss starr am Knie und drehte
+      // mit dem ganzen Bein mit: beim Vorschwung zeigte die Spitze nach unten
+      // (Ballettspitze statt Ferse), beim Abstossen nach oben - also genau
+      // verkehrt. Mit dem Gelenk bleibt die Sohle waagerecht und rollt ab.
+      var ankle = new THREE.Group();
+      ankle.position.y = -SHIN_LEN;
+      knee.add(ankle);
+      var foot = new THREE.Mesh(new THREE.BoxGeometry(0.105, FOOT_H, FOOT_L), shoeMat);
+      foot.position.set(0, -FOOT_Y, FOOT_Z);
+      ankle.add(foot);
+      var toe = new THREE.Mesh(new THREE.SphereGeometry(FOOT_H * 0.72, 8, 6), shoeMat);
+      toe.scale.set(0.72, 1, 1.15);
+      toe.position.set(0, -FOOT_Y, FOOT_Z + FOOT_L / 2 - 0.02);
+      ankle.add(toe);
+      legs.push({ hip: hip, knee: knee, ankle: ankle, side: side });
     });
 
     markShadow(root);
@@ -1996,7 +2079,7 @@
   var lynn = buildPerson({
     skin: '#e0b28d', top: '#2f5f52', legs: '#3a3e45',
     inner: '#efe7d6', apron: '#7b6349',
-    hair: '#2a1d16', shoes: '#4e372a', bun: true, speed: 1.85
+    hair: '#2a1d16', shoes: '#4e372a', bun: true, speed: 1.85, stride: 1.28
   });
   lynn.pos.set(-0.4, 1.4);
   lynn.root.position.set(lynn.pos.x, 0, lynn.pos.y);
@@ -2005,7 +2088,7 @@
   // braune Locken, helle Turnschuhe.
   var guest = buildPerson({
     skin: '#c98d63', top: '#e9dfc9', legs: '#5b7397',
-    hair: '#6b4028', shoes: '#efe7d8', bun: false, speed: 1.35, stride: 1.34
+    hair: '#6b4028', shoes: '#efe7d8', bun: false, speed: 1.35, stride: 1.28
   });
   guest.pos.set(3.6, 3.4);
   guest.root.position.set(guest.pos.x, 0, guest.pos.y);
@@ -2042,6 +2125,7 @@
   window.__inspect.lynn = lynn;
   window.__inspect.guest = guest;
   window.__inspect.walkTo = walkTo;
+  window.__inspect.stepPerson = stepPerson;
 
   // ------------------------------------------------------------------- cat
   var cat = new THREE.Group();
@@ -2170,21 +2254,92 @@
     var ph = person.phase;
     var breathe = Math.sin(performance.now() / 900) * 0.006 * (1 - a);
 
+    // Vorwaerts ist lokal +z, also dreht eine positive Rotation um x das Bein
+    // nach hinten. Die Kniebeugung war mit dem Vorzeichen des Ellbogens
+    // uebernommen und beugte damit nach VORNE - ein Vogelknie. Jetzt positiv.
     person.legs.forEach(function (leg) {
       var offset = leg.side < 0 ? 0 : Math.PI;
-      var swing = Math.sin(ph + offset);
-      leg.hip.rotation.x = swing * 0.66 * a;
-      leg.knee.rotation.x = -Math.max(0, Math.sin(ph + offset - 0.85)) * 1.05 * a;
+      var u = ph + offset;
+
+      // Der Standfuss muss gleichmaessig nach hinten wandern, weil der Koerper
+      // gleichmaessig vorankommt. Ein Sinus ist in der Mitte am schnellsten und
+      // an den Enden am langsamsten - der Fuss rutscht damit zweimal pro
+      // Schritt ueber den Boden. Deshalb Standphase linear, Schwungphase weich
+      // zurueck, und der Hueftwinkel folgt daraus statt umgekehrt.
+      var w = (((u + Math.PI / 2) % TAU) + TAU) % TAU;   // 0 = Fersenauftritt
+      var z;
+      if (w < Math.PI) {
+        z = 1 - 2 * (w / Math.PI);                       // Stand: gerade Bahn
+      } else {
+        var t = (w - Math.PI) / Math.PI;
+        z = -1 + 2 * (t * t * (3 - 2 * t));              // Schwung: weich
+      }
+      var swing = -z;                                    // +1 = Bein hinten
+
+      // Zwei Beugungen: die grosse beim Durchschwingen, und eine kleine beim
+      // Auftreten. Ohne die zweite bleibt das Standbein kerzengerade, das
+      // Becken sackt kaum ab und der Gang wirkt steif wie auf Stelzen.
+      var kn = Math.max(0, Math.sin(u - 0.85)) * 0.7 * a
+             + Math.max(0, Math.cos(u + 1)) * 0.15 * a;
+      leg.knee.rotation.x = kn;
+
+      // Das Knie muss VOR der Huefte feststehen: es verschiebt den Knoechel,
+      // und der Hueftwinkel wird so gewaehlt, dass der Knoechel trotzdem genau
+      // dort landet, wo der gleichmaessig wandernde Standfuss ihn braucht.
+      // Ohne diese Korrektur rutscht der Fuss ein Fuenftel der Schrittlaenge
+      // ueber den Boden. Zwei Newton-Schritte reichen bis unter einen
+      // Millimeter; in Ruhe ist alles null und der Startwert schon die Loesung.
+      var soll = -(THIGH_LEN + SHIN_LEN) * STEP_SIN * z * a;
+      var th = Math.asin(STEP_SIN * swing) * a;
+      for (var it = 0; it < 2; it++) {
+        var g = THIGH_LEN * Math.sin(th) + SHIN_LEN * Math.sin(th + kn) - soll;
+        var gp = THIGH_LEN * Math.cos(th) + SHIN_LEN * Math.cos(th + kn);
+        if (Math.abs(gp) < 1e-4) break;
+        th -= g / gp;
+      }
+      leg.hip.rotation.x = th;
+      // Sohle waagerecht halten und darueber abrollen: Ferse zuerst, wenn das
+      // Bein vorn ist, Zehen zuletzt beim Abstossen.
+      // Nachgerechnet: eine positive Drehung um x senkt die Zehen. Das Bein ist
+      // vorne, wenn swing = -1 - dann muss die Spitze HOCH, also negativ. Mit
+      // dem umgekehrten Vorzeichen tippte die Figur mit den Zehen auf und
+      // stiess mit der Ferse ab.
+      leg.roll = swing * 0.32 * a;
+      leg.ankle.rotation.x = -(leg.hip.rotation.x + leg.knee.rotation.x) + leg.roll;
     });
 
+    // Der Armschwung war auf die alte, doppelt so grosse Beinamplitude
+    // abgestimmt und wirkte daneben wie Marschieren.
     person.arms.forEach(function (arm) {
       var offset = arm.side < 0 ? Math.PI : 0;
-      arm.shoulder.rotation.x = Math.sin(ph + offset) * 0.5 * a;
+      arm.shoulder.rotation.x = Math.sin(ph + offset) * 0.3 * a;
       arm.shoulder.rotation.z = arm.side * (0.08 + 0.03 * a);
-      arm.elbow.rotation.x = -(0.18 + Math.max(0, Math.sin(ph + offset)) * 0.42 * a);
+      arm.elbow.rotation.x = -(0.16 + Math.max(0, Math.sin(ph + offset)) * 0.3 * a);
     });
 
-    person.hips.position.y = person.hipBase + Math.abs(Math.sin(ph)) * 0.055 * a + breathe;
+    // Die Beckenhoehe wurde frueher geraten: hipBase plus |sin(phase)|. Das ist
+    // genau verkehrt herum - das Becken stand am hoechsten, wenn die Beine am
+    // weitesten gespreizt waren, also am tiefsten stehen muessten. Gemessen war
+    // die Figur dadurch ueber weite Teile des Zyklus mit BEIDEN Fuessen in der
+    // Luft, bis zu 15 cm hoch, und der Kontaktschatten loeste sich vom Fuss.
+    //
+    // Jetzt wird der tiefste Punkt der mitgedrehten Fuss-Box unter dem
+    // Hueftgelenk ausgerechnet und das Becken genau so hoch gesetzt, dass die
+    // untere Sohle den Boden beruehrt. Damit ist Bodenkontakt keine Einstellung
+    // mehr, sondern folgt aus der Geometrie.
+    var drop = 0;
+    for (var li = 0; li < person.legs.length; li++) {
+      var leg = person.legs[li];
+      var th = leg.hip.rotation.x;
+      var tk = th + leg.knee.rotation.x;
+      var roll = leg.roll || 0;
+      var cr = Math.cos(roll), sr = Math.sin(roll);
+      var d = THIGH_LEN * Math.cos(th) + SHIN_LEN * Math.cos(tk)
+            + FOOT_Y * cr + FOOT_Z * sr
+            + FOOT_H / 2 * Math.abs(cr) + FOOT_L / 2 * Math.abs(sr);
+      if (d > drop) drop = d;
+    }
+    person.hips.position.y = SOLE_REST + drop + breathe;
     person.hips.rotation.z = Math.sin(ph) * 0.045 * a;
     person.hips.rotation.y = Math.sin(ph) * 0.1 * a;
     person.torso.rotation.y = -Math.sin(ph) * 0.13 * a;
