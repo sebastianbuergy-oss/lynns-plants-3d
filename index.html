@@ -93,6 +93,18 @@
     display:flex;flex-direction:column;line-height:1;
     text-shadow:0 2px 10px rgba(10,22,12,.65);
   }
+  .premium-badge{
+    margin-top:6px;display:inline-flex;align-items:center;gap:4px;
+    width:fit-content;padding:3px 9px;border-radius:20px;
+    background:linear-gradient(120deg,#f6d98a,#e0aa46);
+    color:#3a2a0a;font-size:10px;font-weight:800;letter-spacing:.03em;
+    text-shadow:none;
+  }
+  .ad-count{
+    font-family:var(--display);font-weight:800;font-size:52px;
+    text-align:center;color:var(--moss);margin:8px 0 2px;
+    font-variant-numeric:tabular-nums;
+  }
   .mark b{
     font-family:var(--display);
     font-weight:700;
@@ -456,7 +468,10 @@
   <!-- Die Versionsnummer steht sichtbar da, weil Safari die Seite gecacht hat
        und eine alte Fassung als "immer noch kaputt" durchging. Bei jeder
        Aenderung hochzaehlen. -->
-  <div class="mark"><b>Fleur-Blache’s Blumen</b><span>TESTVERSION &middot; V40</span></div>
+  <div class="mark">
+    <b>Fleur-Blache’s Blumen</b><span>TESTVERSION &middot; V41</span>
+    <em id="premiumBadge" class="premium-badge" hidden>👑 Premium</em>
+  </div>
   <div class="hud-right">
     <div class="level" id="levelBox"><b id="levelValue">LV 1</b><i><em id="levelFill"></em></i></div>
     <button class="coins" id="coinBtn" type="button"><i></i><b id="coinValue">1000</b><em>+</em></button>
@@ -501,6 +516,15 @@
     </div>
     <div class="shop-list" id="shopList"></div>
     <button type="button" class="sheet-close" id="shopClose">Schliessen</button>
+  </div>
+</div>
+
+<div class="sheet" id="adSheet" hidden>
+  <div class="sheet-card">
+    <b>Werbevideo</b>
+    <p>Platzhalter im Prototyp – im fertigen Spiel ein echtes Werbenetzwerk.</p>
+    <div class="ad-count" id="adCountdown">4</div>
+    <p class="demo-note">Gleich gibt es deine Münzen.</p>
   </div>
 </div>
 
@@ -4274,6 +4298,9 @@
     storeSheet: document.getElementById('storeSheet'),
     storeList: document.getElementById('storeList'),
     storeClose: document.getElementById('storeClose'),
+    adSheet: document.getElementById('adSheet'),
+    adCountdown: document.getElementById('adCountdown'),
+    premiumBadge: document.getElementById('premiumBadge'),
     levelValue: document.getElementById('levelValue'),
     levelFill: document.getElementById('levelFill'),
     boot: document.getElementById('boot')
@@ -5209,18 +5236,22 @@
     {
       id: 'basis', name: 'Grundsortiment', cost: 0,
       note: 'Liegt von Anfang an im Laden.',
+      // Je ein Gratis-Kraut aus Blühend, Grossen Pflanzen und Hängend
+      // dazu - sonst zeigt der jeweilige Reiter im Ladencomputer nichts, bevor
+      // das passende Set gekauft ist, und das liest sich wie ein Fehler.
       arten: ['Calathea', 'Monstera', 'Zimmerlinde', 'Schwertfarn',
-              'Goldkugelkaktus', 'Echeveria']
+              'Goldkugelkaktus', 'Echeveria',
+              'Usambaraveilchen', 'Bogenhanf', 'Grünlilie']
     },
     {
-      id: 'bloom', name: 'Blütenzauber', cost: 120,
-      note: 'Fünf blühende Arten, vom Usambaraveilchen bis zur Orchidee.',
-      arten: ['Friedenslilie', 'Usambaraveilchen', 'Orchidee', 'Anthurie', 'Begonie']
+      id: 'bloom', name: 'Blütenzauber', cost: 95,
+      note: 'Vier weitere blühende Arten, von der Friedenslilie bis zur Orchidee.',
+      arten: ['Friedenslilie', 'Orchidee', 'Anthurie', 'Begonie']
     },
     {
-      id: 'desert', name: 'Wüstenkiste', cost: 95,
-      note: 'Vier Arten, die kaum Wasser brauchen.',
-      arten: ['Säulenkaktus', 'Haworthia', 'Aloe', 'Bogenhanf']
+      id: 'desert', name: 'Wüstenkiste', cost: 70,
+      note: 'Drei weitere Arten, die kaum Wasser brauchen.',
+      arten: ['Säulenkaktus', 'Haworthia', 'Aloe']
     },
     {
       id: 'solo', name: 'Grosse Solitäre', cost: 165,
@@ -5228,9 +5259,9 @@
       arten: ['Geigenfeige', 'Zimmerpalme', 'Drachenbaum', 'Gummibaum', 'Pfeilblatt']
     },
     {
-      id: 'hang', name: 'Hängende Gärten', cost: 110,
-      note: 'Vier rankende Arten für Ampeln und Kanten.',
-      arten: ['Efeutute', 'Perlenkette', 'Efeu', 'Grünlilie']
+      id: 'hang', name: 'Hängende Gärten', cost: 80,
+      note: 'Drei weitere rankende Arten für Ampeln und Kanten.',
+      arten: ['Efeutute', 'Perlenkette', 'Efeu']
     }
   ];
 
@@ -5240,6 +5271,53 @@
   });
 
   var unlockedSets = { basis: true };
+  var premium = false;
+
+  // Premium schaltet alle Sets auf einmal frei - im fertigen Spiel eine
+  // einzelne Zahlung im App Store, hier wie die Sets selbst gegen Münzen,
+  // damit sich der Ablauf spielen lässt.
+  var PREMIUM_COST = 320;
+
+  function kaufePremium() {
+    if (premium || coins < PREMIUM_COST) return;
+    setCoins(coins - PREMIUM_COST);
+    premium = true;
+    bought['premium'] = true;
+    PLANT_SETS.forEach(function (satz) { unlockedSets[satz.id] = true; });
+    el.premiumBadge.hidden = false;
+    say('Premium freigeschaltet – alle Pflanzensets sind jetzt dauerhaft offen.');
+    renderStore();
+    if (!el.shopSheet.hidden) renderShop();
+  }
+
+  // Werbevideos: freiwillig, bringen Münzen, kein echtes Netzwerk dahinter.
+  // Begrenzt pro Sitzung, sonst haebelt es die Pflanzensets aus.
+  var AD_LOHN = 40;
+  var AD_LIMIT = 5;
+  var adsGesehen = 0;
+  var adLaeuft = false;
+
+  function zeigeWerbung() {
+    if (adLaeuft || adsGesehen >= AD_LIMIT) return;
+    adLaeuft = true;
+    el.adSheet.hidden = false;
+    var rest = 4;
+    el.adCountdown.textContent = rest;
+    var timer = setInterval(function () {
+      rest--;
+      if (rest <= 0) {
+        clearInterval(timer);
+        el.adSheet.hidden = true;
+        adLaeuft = false;
+        adsGesehen++;
+        setCoins(coins + AD_LOHN);
+        say('Werbung angeschaut: +' + AD_LOHN + ' Münzen.');
+        renderStore();
+      } else {
+        el.adCountdown.textContent = rest;
+      }
+    }, 1000);
+  }
 
   function artFrei(species) {
     var id = setOf[species.name];
@@ -5362,6 +5440,23 @@
     kopf.textContent = 'Im Prototyp ohne echte Zahlung: antippen schaltet frei.';
     list.appendChild(kopf);
 
+    list.appendChild(offerRow(
+      '👑', 'Premium – alles freigeschaltet',
+      premium ? 'Aktiv – alle Pflanzensets sind offen.'
+              : 'Schaltet alle Pflanzensets auf einmal frei. Einmalig, im App Store später eine einzelne Zahlung.',
+      premium ? 'Aktiv' : PREMIUM_COST + ' ●',
+      !premium && coins >= PREMIUM_COST,
+      kaufePremium));
+
+    list.appendChild(offerRow(
+      '🎬', 'Werbevideo ansehen',
+      adsGesehen >= AD_LIMIT
+        ? 'Für heute aufgebraucht – komm später wieder.'
+        : '+' + AD_LOHN + ' Münzen · noch ' + (AD_LIMIT - adsGesehen) + '× heute. Werbevideos gibt es auch mit Premium weiter.',
+      adsGesehen >= AD_LIMIT ? 'Aufgebraucht' : 'Ansehen',
+      adsGesehen < AD_LIMIT && !adLaeuft,
+      zeigeWerbung, true));
+
     COIN_PACKS.forEach(function (pack) {
       list.appendChild(offerRow('🪙', pack.name,
         pack.coins + ' Münzen · ' + pack.preis, 'Kaufen', true,
@@ -5462,8 +5557,11 @@
           var members = pack.pick.map(speciesByName);
           var full = members.reduce(function (sum, item) { return sum + Math.round(item.price * 0.55); }, 0);
           var cost = Math.round(full * 0.85);
+          // Gemaltes Bild der ersten Art im Paket statt eines gerenderten
+          // Platzhalter-Modells - das Paket zeigt sonst die alten, flach
+          // eingefärbten Kegel- und Kugelformen statt der Katalogware.
           list.appendChild(offerRow(
-            photo('pack-' + pack.id, function () { return buildPlant(members[0], 1); }),
+            'art/plants/' + plantSlug(members[0].name) + '-terracotta.webp',
             pack.name,
             pack.note + ' Einzeln ' + full + ', im Paket ' + cost + '.',
             cost + ' ●',
