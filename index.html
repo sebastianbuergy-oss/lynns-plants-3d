@@ -536,7 +536,7 @@
        und eine alte Fassung als "immer noch kaputt" durchging. Bei jeder
        Aenderung hochzaehlen. -->
   <div class="mark">
-    <b>Fleur-Blache’s Blumen</b><span>TESTVERSION &middot; V53</span>
+    <b>Fleur-Blache’s Blumen</b><span>TESTVERSION &middot; V54</span>
     <em id="premiumBadge" class="premium-badge" hidden>👑 Premium</em>
   </div>
   <div class="hud-right">
@@ -1896,7 +1896,33 @@
     new THREE.MeshStandardMaterial({ color: '#7d9a7a', roughness: 0.8 }),
     new THREE.MeshStandardMaterial({ color: '#a86a8f', roughness: 0.8 })
   ];
-  var soilMat = new THREE.MeshStandardMaterial({ color: '#3d2c20', roughness: 1 });
+  // Vorher ein einfarbiges Braun - aus der Naehe (Anzuchtbeet im Wintergarten)
+  // sah das wie eine glatte Plastikplatte aus, nicht wie Erde. Ein paar
+  // hundert zufaellige Krumen loesen die Flaeche auf, ohne dass es dafuer
+  // eine gemalte Textur braucht.
+  function erdTextur() {
+    var c = document.createElement('canvas');
+    c.width = c.height = 128;
+    var g = c.getContext('2d');
+    g.fillStyle = '#3d2c20';
+    g.fillRect(0, 0, 128, 128);
+    for (var i = 0; i < 900; i++) {
+      var x = Math.random() * 128, y = Math.random() * 128;
+      var r = 0.6 + Math.random() * 1.7;
+      g.fillStyle = Math.random() < 0.55
+        ? 'rgba(18,12,9,' + (0.3 + Math.random() * 0.35) + ')'
+        : 'rgba(96,68,42,' + (0.2 + Math.random() * 0.3) + ')';
+      g.beginPath();
+      g.arc(x, y, r, 0, Math.PI * 2);
+      g.fill();
+    }
+    var t = new THREE.CanvasTexture(c);
+    t.wrapS = t.wrapT = THREE.RepeatWrapping;
+    t.repeat.set(3, 3);
+    t.encoding = THREE.sRGBEncoding;
+    return t;
+  }
+  var soilMat = new THREE.MeshStandardMaterial({ color: '#ffffff', roughness: 1, map: erdTextur() });
 
   var leafGeo = new THREE.SphereGeometry(1, 10, 7);
   var bladeGeo = new THREE.ConeGeometry(1, 1, 6);
@@ -4677,6 +4703,92 @@
     return free;
   }
 
+  // Samen wachsen nur in echten Beeten (Wintergarten, Feld) - nie auf einem
+  // Regalbrett. slot.plant ist waehrend des Wachsens schon gesetzt (das
+  // Saemling-Modell selbst), darum zaehlt ein belegtes Beet-Slot separat mit.
+  function openBedSlots() {
+    var free = [];
+    shelves.forEach(function (shelf) {
+      if (!shelf.built || !shelf.bed) return;
+      shelf.slots.forEach(function (slot) {
+        if (!slot.plant && !slot.dead && !slot.saatgut) free.push({ shelf: shelf, slot: slot });
+      });
+    });
+    return free;
+  }
+
+  // -------------------------------------------------------------- Aufzucht
+  // Ein Samen ist kein Kauf-und-fertig wie eine Regalpflanze: er steht als
+  // winziger Setzling im Beet und braucht echte Wartezeit, bis er die volle
+  // Groesse erreicht - "Aufzucht planen", nicht "sofort haben". Dieselbe
+  // buildPlant()-Geometrie wie ein gekauftes Exemplar, nur ueber die Zeit
+  // hochskaliert; kein neues Kunstwerk noetig. Wartezeit laeuft echt weiter,
+  // auch wenn das Spiel zwischendurch geschlossen war (Date.now(), nicht dt) -
+  // beim naechsten Bildaufbau springt der Fortschritt einfach auf den
+  // richtigen Stand statt erst ab dem Wiedereinstieg weiterzuzaehlen.
+  var SAMEN = [
+    { name: 'Calathea', kosten: 10, dauer: 5 },
+    { name: 'Monstera', kosten: 12, dauer: 5 },
+    { name: 'Philodendron', kosten: 10, dauer: 5 },
+    { name: 'Friedenslilie', kosten: 12, dauer: 4 },
+    { name: 'Begonie', kosten: 7, dauer: 3 },
+    { name: 'Gerbera', kosten: 7, dauer: 3 },
+    { name: 'Goldkugelkaktus', kosten: 6, dauer: 3 },
+    { name: 'Aloe', kosten: 7, dauer: 3 },
+    { name: 'Kalanchoe', kosten: 6, dauer: 3 },
+    { name: 'Zimmerpalme', kosten: 16, dauer: 8 },
+    { name: 'Yuccapalme', kosten: 14, dauer: 8 },
+    { name: 'Geigenfeige', kosten: 18, dauer: 8 },
+    { name: 'Efeutute', kosten: 7, dauer: 4 },
+    { name: 'Efeu', kosten: 6, dauer: 4 },
+    { name: 'Grünlilie', kosten: 5, dauer: 4 }
+  ];
+
+  var saatgutListe = [];
+
+  function pflanzeSamen(samen) {
+    var frei = openBedSlots();
+    if (!frei.length || coins < samen.kosten) return;
+    var platz = frei[0];
+    var species = artNachName(samen.name);
+    setCoins(coins - samen.kosten);
+    if (platz.slot.room === undefined) seatSlot(platz.shelf, platz.slot);
+    var want = Math.min(PLANT_HEIGHT[species.style] || 0.46, (platz.slot.room || 0.9) - 0.04);
+    var zielSkala = (want / 0.46) * (0.94 + Math.random() * 0.12);
+    var setzling = buildPlant(species, zielSkala);
+    if (platz.slot.spin === undefined) platz.slot.spin = Math.random() * Math.PI * 2;
+    setzling.rotation.y = platz.slot.spin;
+    setzling.position.set(platz.slot.x, platz.slot.y, platz.slot.z);
+    setzling.scale.setScalar(zielSkala * 0.05);
+    platz.shelf.group.add(setzling);
+    platz.slot.plant = setzling;
+    platz.slot.saatgut = true;
+    saatgutListe.push({
+      plant: setzling, shelf: platz.shelf, slot: platz.slot, species: species,
+      zielSkala: zielSkala, start: Date.now(), dauer: samen.dauer * 60 * 1000
+    });
+    say(samen.name + ' eingepflanzt – in ' + samen.dauer + ' Minuten steht es bereit.');
+    if (!el.shopSheet.hidden) renderShop();
+  }
+
+  function updateSaatgut() {
+    if (!saatgutListe.length) return;
+    var jetzt = Date.now();
+    for (var i = saatgutListe.length - 1; i >= 0; i--) {
+      var s = saatgutListe[i];
+      var fortschritt = Math.min(1, (jetzt - s.start) / s.dauer);
+      s.plant.scale.setScalar(s.zielSkala * (0.05 + fortschritt * 0.95));
+      if (fortschritt >= 1) {
+        s.slot.saatgut = false;
+        s.plant.userData.pick = { species: s.species, shelf: s.shelf, slot: s.slot, water: 0.7 };
+        s.plant.traverse(function (n) { if (n.isMesh) n.userData.owner = s.plant; });
+        sellables.push(s.plant);
+        say(s.species.name + ' ist herangewachsen – bereit zum Verkauf.');
+        saatgutListe.splice(i, 1);
+      }
+    }
+  }
+
   function buildBed(x, z, label) {
     var group = new THREE.Group();
     group.position.set(x, 0, z);
@@ -4697,7 +4809,7 @@
     markShadow(group);
     scene.add(group);
     OBSTACLES.push({ x: x, z: z, r: 1.35, active: true });
-    var bed = { group: group, hit: hit, slots: slots, label: label, built: true };
+    var bed = { group: group, hit: hit, slots: slots, label: label, built: true, bed: true };
     hit.userData.shelf = bed;
     shelves.push(bed);
     seatUnit(bed);
@@ -4879,9 +4991,16 @@
     hinterGlas.position.set(0, hochH / 2, TERRASSE.z1 + 0.05);
     scene.add(keinTreffer(hinterGlas));
 
-    buildBed(-3.2, mitteZ - 0.6, 'Glashausbeet links');
-    buildBed(0.2, mitteZ - 0.6, 'Glashausbeet rechts');
+    buildBed(-3.2, mitteZ - 0.6, 'Anzuchtbeet links');
+    buildBed(0.2, mitteZ - 0.6, 'Anzuchtbeet rechts');
     guestSpots.push({ x: -3.2, z: mitteZ + 0.9 }, { x: 0.2, z: mitteZ + 0.9 });
+
+    // Zwei Bodenpflanzen fest dazu, kein Kauf - sonst waere der Wintergarten
+    // nur zwei Kisten unter Glas, kein Raum zum Verweilen. Keine Ampel hier:
+    // deren Schnur haengt bis zur Ladendecke (WALL_H) hoch, hier gibt es nur
+    // das schraege Glasdach, das waere durchs Glas gestochen.
+    floorPlant(ROOM_W / 2 - 0.7, mitteZ - 1.6, 0.6);
+    floorPlant(-ROOM_W / 2 + 0.7, mitteZ + 1.8, 0.55);
   }
 
   var candleMat = new THREE.MeshStandardMaterial({ color: '#f2e6cd', roughness: 0.6 });
@@ -5864,7 +5983,7 @@
 
   // ------------------------------------------------------------ Raeume-Paket
   var RAEUME_PAKET = {
-    id: 'raeume-beide', name: 'Gewächshaus + Feld', preis: 'CHF 4.—',
+    id: 'raeume-beide', name: 'Wintergarten + Feld', preis: 'CHF 4.—',
     note: 'Beide Erweiterungen hinter dem Haus auf einen Schlag.'
   };
 
@@ -5873,7 +5992,7 @@
     if (!outdoor) openGreenhouse();
     if (!meadowBought) openMeadow();
     bought[RAEUME_PAKET.id] = true;
-    if (!beideSchonDa) say('Gewächshaus und Feld stehen bereit.');
+    if (!beideSchonDa) say('Wintergarten und Feld stehen bereit.');
     renderShop();
     renderStore();
   }
@@ -6191,16 +6310,21 @@
 
     if (shopTab === 'plants') {
       var free = openSlots().length;
+      var freieBeete = openBedSlots().length;
       var hint = document.createElement('p');
       hint.className = 'demo-note';
-      hint.textContent = free
-        ? free + ' freie Plätze auf Regalen, Tischen und Beeten.'
-        : 'Noch kein Platz. Bestelle zuerst ein Regal oder einen Tisch.';
+      hint.textContent = plantGroup === 'samen'
+        ? (freieBeete
+            ? freieBeete + ' freie Plätze in Anzuchtbeeten (Wintergarten, Feld).'
+            : 'Noch kein Anzuchtbeet frei. Wintergarten oder Feld hinterm Haus bestellen.')
+        : (free
+            ? free + ' freie Plätze auf Regalen, Tischen und Beeten.'
+            : 'Noch kein Platz. Bestelle zuerst ein Regal oder einen Tisch.');
       list.appendChild(hint);
 
       var chips = document.createElement('div');
       chips.className = 'chips';
-      PLANT_GROUPS.forEach(function (group) {
+      PLANT_GROUPS.concat([{ id: 'samen', name: '🌱 Samen' }]).forEach(function (group) {
         var chip = document.createElement('button');
         chip.type = 'button';
         chip.textContent = group.name;
@@ -6209,6 +6333,23 @@
         chips.appendChild(chip);
       });
       list.appendChild(chips);
+
+      if (plantGroup === 'samen') {
+        var samenNote = document.createElement('p');
+        samenNote.className = 'demo-note';
+        samenNote.textContent = 'Günstiger als die fertige Pflanze, aber sie braucht Zeit: eingepflanzt wächst sie von selbst weiter, auch wenn der Laden geschlossen ist.';
+        list.appendChild(samenNote);
+        SAMEN.filter(function (samen) { return artFrei(artNachName(samen.name)); }).forEach(function (samen) {
+          var species = artNachName(samen.name);
+          list.appendChild(offerRow(
+            'art/plants/' + plantSlug(samen.name) + '-terracotta.webp',
+            samen.name,
+            'Wächst in ' + samen.dauer + ' Minuten · normal ' + Math.round(species.price * 0.55) + ' Münzen',
+            samen.kosten + ' ●', coins >= samen.kosten && freieBeete > 0,
+            function () { pflanzeSamen(samen); }));
+        });
+        return;
+      }
 
       var chosen = PLANT_GROUPS[0];
       PLANT_GROUPS.forEach(function (group) { if (group.id === plantGroup) chosen = group; });
@@ -6255,18 +6396,18 @@
       }
 
       if (buildGroup === 'rooms') {
-        list.appendChild(offerRow('\u2302', 'Gew\u00e4chshaus draussen',
-          outdoor ? 'Das Gew\u00e4chshaus steht.' : 'Hinter dem Laden: Hintert\u00fcr auf, Holzdeck unter Glas, zwei Anzuchtbeete.',
+        list.appendChild(offerRow('\u2302', 'Wintergarten',
+          outdoor ? 'Der Wintergarten steht \u2013 zwei Anzuchtbeete f\u00fcr Samen warten unter dem Glasdach.' : 'Hinter dem Laden: Hintert\u00fcr auf, Holzdeck unter Glas, zwei Anzuchtbeete f\u00fcr Samen.',
           outdoor ? 'Gekauft' : '120 \u25cf', !outdoor && coins >= 120,
           function () {
             setCoins(coins - 120);
             openGreenhouse();
             renderShop();
-            say('Das Gew\u00e4chshaus steht \u2013 Lynn geht durch die Hintert\u00fcr hinaus.');
+            say('Der Wintergarten steht \u2013 Lynn geht durch die Hintert\u00fcr hinaus.');
           }));
         list.appendChild(offerRow('\u2698', 'Feld hinterm Haus',
-          meadowBought ? 'Vier Hochbeete stehen bereit.'
-                       : 'Das Bauland hinter dem Laden: Zaun, Gartenweg und vier Hochbeete.',
+          meadowBought ? 'Vier Hochbeete stehen bereit \u2013 auch f\u00fcr Samen.'
+                       : 'Das Bauland hinter dem Laden: Zaun, Gartenweg und vier Hochbeete f\u00fcr Samen.',
           meadowBought ? 'Gekauft' : '180 \u25cf', !meadowBought && coins >= 180,
           function () {
             setCoins(coins - 180);
@@ -6908,6 +7049,8 @@
   // messen. Kostet im Spiel nichts, es ruft sie niemand auf.
   window.__inspect.shelves = shelves;
   window.__inspect.openSlots = openSlots;
+  window.__inspect.saatgutListe = saatgutListe;
+  window.__inspect.openBedSlots = openBedSlots;
   window.__inspect.personal = PERSONAL;
   window.__inspect.tick = function (schritte, dt) {
     dt = dt || 1 / 60;
@@ -6932,6 +7075,7 @@
     stepLagerist(dt);
     stepLeiterin(dt);
     tendPlants(dt);
+    updateSaatgut();
     if (picked) refreshTray();
 
     catTail.rotation.z = Math.sin(now / 620) * 0.28;
