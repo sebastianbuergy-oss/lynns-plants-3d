@@ -368,7 +368,14 @@
   .pot-choice:focus-visible{outline:2px solid var(--moss);outline-offset:2px}
   /* Steht im Markup vor #storeSheet, braeuchte also ohne das hier einen
      zweiten Tipp zum Schliessen, bevor der Inhalt sichtbar waere. */
-  #paketSheet{z-index:31}
+  #paketSheet,#moebelSheet{z-index:31}
+  .paket-teil.waehlbar{
+    font:inherit;color:var(--ink);cursor:pointer;width:100%;
+  }
+  .paket-teil.waehlbar.on{
+    background:var(--accent);border:1px solid var(--accent-deep);
+  }
+  .paket-teil.waehlbar.on span{color:#fff}
   .paket-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;max-height:50vh;overflow-y:auto}
   .paket-teil{
     display:flex;flex-direction:column;align-items:center;gap:4px;
@@ -559,7 +566,7 @@
        und eine alte Fassung als "immer noch kaputt" durchging. Bei jeder
        Aenderung hochzaehlen. -->
   <div class="mark">
-    <b>Fleur-Blache’s Blumen</b><span>TESTVERSION &middot; V56</span>
+    <b>Fleur-Blache’s Blumen</b><span>TESTVERSION &middot; V57</span>
     <em id="premiumBadge" class="premium-badge" hidden>👑 Premium</em>
   </div>
   <div class="hud-right">
@@ -625,6 +632,15 @@
     <p id="paketUntertitel"></p>
     <div class="paket-grid" id="paketGrid"></div>
     <button type="button" class="sheet-close" id="paketClose">Schliessen</button>
+  </div>
+</div>
+
+<div class="sheet" id="moebelSheet" hidden>
+  <div class="sheet-card">
+    <b id="moebelTitel">Holz auswählen</b>
+    <p id="moebelUntertitel"></p>
+    <div class="paket-grid" id="moebelGrid"></div>
+    <button type="button" class="sheet-close" id="moebelClose">Schliessen</button>
   </div>
 </div>
 
@@ -2640,6 +2656,30 @@
   ], 1.6, 1.2);
   dressUnit(tableUnit, tablePending, 0.78, 'height');
 
+  // Runder Tisch - "sei kreativer, auch runder tisch usw". Rein prozedural,
+  // kein GLB-Ersatz: der quadratische Tisch oben tauscht sich per dressUnit
+  // gegen ein echtes Modell aus, aber fuer eine runde Platte gibt es keins
+  // im Fundus - und die alte Lektion mit den Regalen (Hoehen-Fit verzerrt
+  // Kenney-Moebel) gilt hier genauso, also lieber gleich selbst gebaut.
+  var rundtisch = new THREE.Group();
+  var rundtischPlatte = new THREE.Mesh(new THREE.CylinderGeometry(0.75, 0.75, 0.08, 24), woodMat);
+  rundtischPlatte.position.y = 0.76;
+  rundtisch.add(rundtischPlatte);
+  var rundtischSaeule = new THREE.Mesh(new THREE.CylinderGeometry(0.09, 0.12, 0.68, 12), frameWood);
+  rundtischSaeule.position.y = 0.38;
+  rundtisch.add(rundtischSaeule);
+  var rundtischFuss = new THREE.Mesh(new THREE.CylinderGeometry(0.32, 0.32, 0.05, 20), darkMat);
+  rundtischFuss.position.y = 0.025;
+  rundtisch.add(rundtischFuss);
+  rundtisch.position.set(3.7, 0, 2.6);
+  markShadow(rundtisch);
+  scene.add(rundtisch);
+  var rundtischUnit = registerSurface(rundtisch, 'Runder Tisch', [
+    { tier: 0, x: -0.35, y: 0.81, z: 0.1, plant: null },
+    { tier: 0, x: 0.3, y: 0.81, z: -0.15, plant: null },
+    { tier: 0, x: 0, y: 0.81, z: 0.3, plant: null }
+  ], 1.5, 1.5);
+
   // Teppiche als reine Farbflaeche lesen sich wie verschuettete Farbe: eine
   // waagerechte Flaeche bekommt hier rund das Anderthalbfache ihrer Grundfarbe
   // ab, und ohne Struktur bleibt nur ein heller Fleck. Ein geflochtenes Muster
@@ -4559,6 +4599,11 @@
     paketUntertitel: document.getElementById('paketUntertitel'),
     paketGrid: document.getElementById('paketGrid'),
     paketClose: document.getElementById('paketClose'),
+    moebelSheet: document.getElementById('moebelSheet'),
+    moebelTitel: document.getElementById('moebelTitel'),
+    moebelUntertitel: document.getElementById('moebelUntertitel'),
+    moebelGrid: document.getElementById('moebelGrid'),
+    moebelClose: document.getElementById('moebelClose'),
     premiumBadge: document.getElementById('premiumBadge'),
     levelValue: document.getElementById('levelValue'),
     levelFill: document.getElementById('levelFill'),
@@ -5745,6 +5790,75 @@
     setSurface(woodMat, 'holz-' + id, 2, 2);
   }
 
+  // "Klick drauf und die Farbe/das Holz auswählen können" - bisher teilten
+  // sich alle Regale und Tische dasselbe woodMat, eine Wahl faerbte immer
+  // den ganzen Laden auf einmal um. Jede Einheit bekommt jetzt ihr eigenes
+  // Material (muss ueber setSurface geladen werden, nicht per .clone() -
+  // die Textur von woodMat selbst laedt asynchron erst Sekunden nach dem
+  // Start, ein blosser Klon haette sie nie bekommen). Muss hier stehen,
+  // nicht direkt bei buildShelf()/registerSurface() - finishTex/setSurface
+  // existieren dort im Skriptablauf noch nicht (siehe Hoisting-Falle).
+  shelves.forEach(function (unit) {
+    var eigenesHolz = new THREE.MeshStandardMaterial({ color: '#b47c42', roughness: 0.72 });
+    unit.holzMat = eigenesHolz;
+    unit.holzId = gewaehlt.holz;
+    unit.group.traverse(function (n) {
+      if (n.isMesh && n.material === woodMat) n.material = eigenesHolz;
+    });
+    setSurface(eigenesHolz, 'holz-' + unit.holzId, 2, 2);
+  });
+
+  function setzeMoebelHolz(unit, id) {
+    unit.holzId = id;
+    setSurface(unit.holzMat, 'holz-' + id, 2, 2);
+    // Der Katalogschnappschuss ist gecacht (photo()) - ohne den Eintrag zu
+    // loeschen wuerde die Kachel im Laden weiter das alte Holz zeigen.
+    delete photos['unit-' + unit.label];
+  }
+
+  function zeigeMoebelHolzWahl(unit) {
+    el.moebelTitel.textContent = unit.label + ' – Holz';
+    el.moebelUntertitel.textContent = 'Einmal gekauft, jederzeit wechselbar – nur für dieses Stück.';
+    el.moebelGrid.textContent = '';
+    HOLZ_AUSFUEHRUNGEN.forEach(function (e) {
+      var gekauft = e.cost === 0 || bought['farbe-holz-' + e.id];
+      var kachel = document.createElement('button');
+      kachel.type = 'button';
+      kachel.className = 'paket-teil waehlbar' + (unit.holzId === e.id ? ' on' : '');
+      var img = document.createElement('img');
+      img.src = vorschauBild('holz-' + e.id);
+      img.alt = '';
+      kachel.appendChild(img);
+      var name = document.createElement('span');
+      name.textContent = e.name + (unit.holzId === e.id ? ' ✓' : gekauft ? '' : ' · ' + e.cost + ' ●');
+      kachel.appendChild(name);
+      kachel.addEventListener('click', function () {
+        if (unit.holzId === e.id) return;
+        if (!gekauft) {
+          if (coins < e.cost) return;
+          setCoins(coins - e.cost);
+          bought['farbe-holz-' + e.id] = true;
+        }
+        setzeMoebelHolz(unit, e.id);
+        zeigeMoebelHolzWahl(unit);
+      });
+      el.moebelGrid.appendChild(kachel);
+    });
+    el.moebelSheet.hidden = false;
+  }
+
+  // Tippt man auf ein Regal/einen Tisch in der Liste (nicht auf den
+  // Kaufknopf), oeffnet sich die Holzwahl fuer genau dieses Stueck - "klick
+  // drauf und die Farbe/das Holz auswaehlen koennen". Funktioniert schon vor
+  // dem Kauf (man entscheidet sich vorher fuer ein Holz) und danach.
+  function machMoebelAnpassbar(row, unit) {
+    row.classList.add('offer-vorschau');
+    row.addEventListener('click', function (e) {
+      if (e.target.closest('button')) return;
+      zeigeMoebelHolzWahl(unit);
+    });
+  }
+
   function setzeWand(id) {
     gewaehlt.wand = id;
     setSurface(wallUpMat, 'wand-' + id, 1, 1);
@@ -6570,22 +6684,25 @@
         { unit: shelfD, cost: 20, cat: 'racks', note: 'Schmal, passt in jede Ecke.' },
         { unit: shelfE, cost: 24, cat: 'tables', note: 'Arbeitsh\u00f6he mit Ablage darunter.' },
         { unit: tableUnit, cost: 20, cat: 'tables', note: 'Drei Pl\u00e4tze mitten im Raum.' },
+        { unit: rundtischUnit, cost: 26, cat: 'tables', note: 'Runde Platte auf einer S\u00e4ule, drei Pl\u00e4tze.' },
         { unit: benchUnit, cost: 18, cat: 'tables', note: 'F\u00fcnf Pl\u00e4tze auf der Bank am Eingang.' },
         { unit: wallShelfUnit, cost: 22, cat: 'wall', note: 'Zwei Bretter, f\u00fcnf Pl\u00e4tze.' },
         { unit: ropeShelfUnit, cost: 26, cat: 'wall', note: 'An Seilen aufgeh\u00e4ngt, vier Pl\u00e4tze.' }
       ];
       units.filter(function (item) { return item.cat === buildGroup; }).forEach(function (item) {
-        var state = item.unit.built ? 'Steht im Laden.'
-          : (item.unit.ordered ? 'Liegt in der Anlieferung.' : item.note);
+        var state = item.unit.built ? 'Steht im Laden. Antippen f\u00fcr Holz & Farbe.'
+          : (item.unit.ordered ? 'Liegt in der Anlieferung.' : item.note + ' Antippen f\u00fcr Holz & Farbe.');
         var label = item.unit.built ? 'Gekauft' : (item.unit.ordered ? 'Geliefert' : item.cost + ' \u25cf');
-        list.appendChild(offerRow(unitPhoto(item.unit), item.unit.label, state, label,
+        var row = offerRow(unitPhoto(item.unit), item.unit.label, state, label,
           !item.unit.built && !item.unit.ordered && coins >= item.cost,
           function () {
             if (item.unit.built || item.unit.ordered || coins < item.cost) return;
             setCoins(coins - item.cost);
             deliverUnit(item.unit, item.unit.label);
             renderShop();
-          }));
+          });
+        list.appendChild(row);
+        machMoebelAnpassbar(row, item.unit);
       });
       return;
     }
@@ -6882,6 +6999,16 @@
   el.paketClose.addEventListener('click', function () { el.paketSheet.hidden = true; });
   el.paketSheet.addEventListener('click', function (e) {
     if (e.target === el.paketSheet) el.paketSheet.hidden = true;
+  });
+
+  el.moebelClose.addEventListener('click', function () {
+    el.moebelSheet.hidden = true;
+    if (!el.shopSheet.hidden) renderShop();
+  });
+  el.moebelSheet.addEventListener('click', function (e) {
+    if (e.target !== el.moebelSheet) return;
+    el.moebelSheet.hidden = true;
+    if (!el.shopSheet.hidden) renderShop();
   });
 
   // Selling by hand would mint coins out of nothing and undercut the coin
