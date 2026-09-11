@@ -366,6 +366,24 @@
   .pot-choice span{font-size:9px;font-weight:700;color:var(--ink-soft);font-variant-numeric:tabular-nums}
   .pot-choice:disabled{opacity:.4;cursor:default}
   .pot-choice:focus-visible{outline:2px solid var(--moss);outline-offset:2px}
+  /* Steht im Markup vor #storeSheet, braeuchte also ohne das hier einen
+     zweiten Tipp zum Schliessen, bevor der Inhalt sichtbar waere. */
+  #paketSheet{z-index:31}
+  .paket-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;max-height:50vh;overflow-y:auto}
+  .paket-teil{
+    display:flex;flex-direction:column;align-items:center;gap:4px;
+    border:1px solid rgba(27,42,29,.13);border-radius:12px;
+    background:rgba(255,255,255,.6);padding:8px 4px 7px;
+  }
+  .paket-teil img{width:100%;aspect-ratio:1;object-fit:contain;border-radius:8px}
+  .paket-teil span{font-size:10px;font-weight:700;text-align:center;line-height:1.2}
+  .paket-teil.highlight{
+    grid-column:span 3;flex-direction:row;text-align:left;
+    background:linear-gradient(120deg,rgba(246,217,138,.35),rgba(201,146,47,.18));
+    border-color:rgba(184,134,46,.35);padding:10px;
+  }
+  .paket-teil.highlight img{width:64px;flex:0 0 64px;aspect-ratio:1}
+  .paket-teil.highlight span{font-size:13px;font-weight:800;text-align:left}
   .sheet-close{
     width:100%;margin-top:11px;min-height:46px;padding:12px;
     border:0;border-radius:11px;
@@ -492,14 +510,19 @@
   .offer button:disabled{background:rgba(20,30,15,.09);color:var(--ink-soft);cursor:default}
   .offer button:focus-visible{outline:2px solid var(--accent-deep);outline-offset:2px}
   .offer.demo{border-style:dashed}
-  /* Echtgeld-Zeilen (In-App und Premium) bekommen unabhaengig vom Reiter
-     immer ihr eigenes Gold, auch dort, wo sie zusammen mit Muenzenware in
-     derselben Liste stehen (Muenzenladen unten im Coin-Sheet) - "In app
-     muss eine eigene Sache sein". */
+  /* Grosse Pakete/Sets und Premium bekommen unabhaengig vom Reiter immer ihr
+     eigenes Gold, auch dort, wo sie zusammen mit gewoehnlicher Muenzenware in
+     derselben Liste stehen (Muenzenladen unten im Coin-Sheet) - markiert sie
+     als "diese Bestellung ist gross", jetzt wo alles Muenzen kostet, nicht
+     mehr als "diese Bestellung ist echtes Geld". */
   .offer.offer-cash{border-color:rgba(184,134,46,.35)}
   .offer.offer-cash img,.offer.offer-cash i{background:linear-gradient(155deg,#fbeecb,#f0d68f)}
   .offer.offer-cash button{background:linear-gradient(120deg,#f0c165,#c1852c);color:#3a2506}
   .offer.offer-cash button:disabled{background:rgba(184,134,46,.16);color:#8a6a28}
+  /* Tippt man aufs Bild oder den Titel (nicht den Kaufknopf), zeigt sich der
+     Paketinhalt - "man muss wissen was drin ist". */
+  .offer.offer-vorschau{cursor:pointer}
+  .offer.offer-vorschau div{cursor:pointer}
   .demo-note{
     grid-column:1/-1;
     margin:0 0 9px;padding:8px 10px;border-radius:10px;
@@ -536,7 +559,7 @@
        und eine alte Fassung als "immer noch kaputt" durchging. Bei jeder
        Aenderung hochzaehlen. -->
   <div class="mark">
-    <b>Fleur-Blache’s Blumen</b><span>TESTVERSION &middot; V54</span>
+    <b>Fleur-Blache’s Blumen</b><span>TESTVERSION &middot; V55</span>
     <em id="premiumBadge" class="premium-badge" hidden>👑 Premium</em>
   </div>
   <div class="hud-right">
@@ -580,7 +603,7 @@
       <button type="button" data-tab="build">Regale &amp; Räume</button>
       <button type="button" data-tab="decor">Deko</button>
       <button type="button" data-tab="paint">Einrichten</button>
-      <button type="button" data-tab="inapp">In-App 👑</button>
+      <button type="button" data-tab="inapp">Pakete 👑</button>
     </div>
     <div class="shop-list" id="shopList"></div>
     <button type="button" class="sheet-close" id="shopClose">Schliessen</button>
@@ -593,6 +616,15 @@
     <p>Platzhalter im Prototyp – im fertigen Spiel ein echtes Werbenetzwerk.</p>
     <div class="ad-count" id="adCountdown">4</div>
     <p class="demo-note">Gleich gibt es deine Münzen.</p>
+  </div>
+</div>
+
+<div class="sheet" id="paketSheet" hidden>
+  <div class="sheet-card">
+    <b id="paketTitel">Paket</b>
+    <p id="paketUntertitel"></p>
+    <div class="paket-grid" id="paketGrid"></div>
+    <button type="button" class="sheet-close" id="paketClose">Schliessen</button>
   </div>
 </div>
 
@@ -4522,6 +4554,11 @@
     storeClose: document.getElementById('storeClose'),
     adSheet: document.getElementById('adSheet'),
     adCountdown: document.getElementById('adCountdown'),
+    paketSheet: document.getElementById('paketSheet'),
+    paketTitel: document.getElementById('paketTitel'),
+    paketUntertitel: document.getElementById('paketUntertitel'),
+    paketGrid: document.getElementById('paketGrid'),
+    paketClose: document.getElementById('paketClose'),
     premiumBadge: document.getElementById('premiumBadge'),
     levelValue: document.getElementById('levelValue'),
     levelFill: document.getElementById('levelFill'),
@@ -5747,47 +5784,47 @@
               'Efeutute Neon', 'Silberranke', 'Immergrün', 'Tradeskantie', 'Kapefeu']
     },
     {
-      id: 'bloom', name: 'Blütenzauber', preis: 'CHF 3.—', cat: 'bloom',
+      id: 'bloom', name: 'Blütenzauber', preis: 600, cat: 'bloom',
       note: 'Vier weitere blühende Arten, von der Friedenslilie bis zur Orchidee.',
       arten: ['Friedenslilie', 'Orchidee', 'Anthurie', 'Begonie']
     },
     {
-      id: 'desert', name: 'Wüstenkiste', preis: 'CHF 2.—', cat: 'succ',
+      id: 'desert', name: 'Wüstenkiste', preis: 400, cat: 'succ',
       note: 'Drei weitere Arten, die kaum Wasser brauchen.',
       arten: ['Säulenkaktus', 'Haworthia', 'Aloe']
     },
     {
-      id: 'solo', name: 'Grosse Solitäre', preis: 'CHF 4.—', cat: 'big',
+      id: 'solo', name: 'Grosse Solitäre', preis: 800, cat: 'big',
       note: 'Fünf Arten für den grossen Auftritt.',
       arten: ['Geigenfeige', 'Zimmerpalme', 'Drachenbaum', 'Gummibaum', 'Pfeilblatt']
     },
     {
-      id: 'hang', name: 'Hängende Gärten', preis: 'CHF 2.—', cat: 'hang',
+      id: 'hang', name: 'Hängende Gärten', preis: 400, cat: 'hang',
       note: 'Drei weitere rankende Arten für Ampeln und Kanten.',
       arten: ['Efeutute', 'Perlenkette', 'Efeu']
     },
     {
-      id: 'green2', name: 'Grüne Vielfalt', preis: 'CHF 2.—', cat: 'green',
+      id: 'green2', name: 'Grüne Vielfalt', preis: 400, cat: 'green',
       note: 'Philodendron, Kroton und Aralie – drei weitere Blattpflanzen.',
       arten: ['Philodendron', 'Kroton', 'Aralie']
     },
     {
-      id: 'bloom2', name: 'Blütenpracht', preis: 'CHF 3.—', cat: 'bloom',
+      id: 'bloom2', name: 'Blütenpracht', preis: 600, cat: 'bloom',
       note: 'Gerbera, Azalee, Hortensie und Alpenveilchen – vier weitere blühende Arten.',
       arten: ['Gerbera', 'Azalee', 'Hortensie', 'Alpenveilchen']
     },
     {
-      id: 'desert2', name: 'Sukkulenten-Sammlung', preis: 'CHF 3.—', cat: 'succ',
+      id: 'desert2', name: 'Sukkulenten-Sammlung', preis: 600, cat: 'succ',
       note: 'Feigenkaktus, Weihnachtskaktus, Kalanchoe und Geldbaum – vier weitere pflegeleichte Arten.',
       arten: ['Feigenkaktus', 'Weihnachtskaktus', 'Kalanchoe', 'Geldbaum']
     },
     {
-      id: 'solo2', name: 'Grosse Auswahl', preis: 'CHF 3.—', cat: 'big',
+      id: 'solo2', name: 'Grosse Auswahl', preis: 600, cat: 'big',
       note: 'Yuccapalme, Bananenpflanze und Ficus Benjamini – drei weitere Blickfänger.',
       arten: ['Yuccapalme', 'Bananenpflanze', 'Ficus Benjamini']
     },
     {
-      id: 'hang2', name: 'Rankende Vielfalt', preis: 'CHF 2.—', cat: 'hang',
+      id: 'hang2', name: 'Rankende Vielfalt', preis: 400, cat: 'hang',
       note: 'Hängepetunie, Fuchsie und Kletterfeige – drei weitere rankende Arten.',
       arten: ['Hängepetunie', 'Fuchsie', 'Kletterfeige']
     },
@@ -5795,61 +5832,61 @@
     // Sets je Kategorie - "im inapp die pflanzen in ihren kategorien
     // anbieten" (Kategorie-Chips dazu in renderInAppPflanzen).
     {
-      id: 'green3', name: 'Grüne Vielfalt II', preis: 'CHF 4.—', cat: 'green',
+      id: 'green3', name: 'Grüne Vielfalt II', preis: 800, cat: 'green',
       note: 'Sieben weitere Blattpflanzen, von der Nestfarn bis zum Kupferblatt.',
       arten: ['Nestfarn', 'Hirschgeweihfarn', 'Korallenbeere', 'Kaffeepflanze',
               'Korbmarante', 'Baumfreund', 'Kupferblatt']
     },
     {
-      id: 'green4', name: 'Grüne Vielfalt III', preis: 'CHF 4.—', cat: 'green',
+      id: 'green4', name: 'Grüne Vielfalt III', preis: 800, cat: 'green',
       note: 'Schefflera, Dieffenbachie und vier weitere Blattschönheiten.',
       arten: ['Schefflera', 'Dieffenbachie', 'Efeu-Aralie', 'Elefantenohr',
               'Zimmertanne', 'Tillandsie']
     },
     {
-      id: 'bloom3', name: 'Blütenpracht II', preis: 'CHF 4.—', cat: 'bloom',
+      id: 'bloom3', name: 'Blütenpracht II', preis: 800, cat: 'bloom',
       note: 'Amaryllis, Hyazinthe und fünf weitere Blühwunder.',
       arten: ['Amaryllis', 'Narzisse', 'Hyazinthe', 'Ranunkel',
               'Chrysantheme', 'Weihnachtsstern', 'Bromelie']
     },
     {
-      id: 'bloom4', name: 'Blütenpracht III', preis: 'CHF 4.—', cat: 'bloom',
+      id: 'bloom4', name: 'Blütenpracht III', preis: 800, cat: 'bloom',
       note: 'Passionsblume, Kamelie und drei weitere edle Blüten.',
       arten: ['Passionsblume', 'Löwenmäulchen', 'Kamelie', 'Gardenie',
               'Wachsblume', 'Klivie']
     },
     {
-      id: 'desert3', name: 'Sukkulenten-Sammlung II', preis: 'CHF 4.—', cat: 'succ',
+      id: 'desert3', name: 'Sukkulenten-Sammlung II', preis: 800, cat: 'succ',
       note: 'Mammillarie, Wüstenrose und vier weitere genügsame Arten.',
       arten: ['Mammillarie', 'Agave', 'Silberkaktus', 'Wüstenrose',
               'Sternkaktus', 'Mondkaktus', 'Elefantenfuss']
     },
     {
-      id: 'desert4', name: 'Sukkulenten-Sammlung III', preis: 'CHF 4.—', cat: 'succ',
+      id: 'desert4', name: 'Sukkulenten-Sammlung III', preis: 800, cat: 'succ',
       note: 'Tigerzahn-Aloe, Christusdorn und drei weitere Sukkulenten.',
       arten: ['Tigerzahn-Aloe', 'Wolfsmilch', 'Gasteria', 'Feuerstab',
               'Blattkaktus', 'Christusdorn']
     },
     {
-      id: 'solo3', name: 'Grosse Auswahl II', preis: 'CHF 5.—', cat: 'big',
+      id: 'solo3', name: 'Grosse Auswahl II', preis: 1000, cat: 'big',
       note: 'Kentiapalme, Strelitzie und vier weitere Blickfänger.',
       arten: ['Kentiapalme', 'Kokospalme', 'Baumfarn', 'Strelitzie',
               'Baumphilodendron', 'Papyrus', 'Olivenbaum']
     },
     {
-      id: 'solo4', name: 'Grosse Auswahl III', preis: 'CHF 5.—', cat: 'big',
+      id: 'solo4', name: 'Grosse Auswahl III', preis: 1000, cat: 'big',
       note: 'Palmfarn, Orangenbaum und drei weitere grosse Solitäre.',
       arten: ['Palmfarn', 'Türkische Feige', 'Goldfruchtpalme', 'Affenbrotbaum',
               'Orangenbaum', 'Granatapfelbaum']
     },
     {
-      id: 'hang3', name: 'Rankende Vielfalt II', preis: 'CHF 4.—', cat: 'hang',
+      id: 'hang3', name: 'Rankende Vielfalt II', preis: 800, cat: 'hang',
       note: 'Fensterblatt Adansonii, Herzblatt-Hoya und vier weitere Ranken.',
       arten: ['Fensterblatt Adansonii', 'Efeutute Marmor', 'Zauberglöckchen',
               'Korallenkaktus', 'Herzblatt-Hoya', 'Goldrand-Efeu', 'Bananenkette']
     },
     {
-      id: 'hang4', name: 'Rankende Vielfalt III', preis: 'CHF 4.—', cat: 'hang',
+      id: 'hang4', name: 'Rankende Vielfalt III', preis: 800, cat: 'hang',
       note: 'Schmetterlingsranke, Spargelfarn und drei weitere Ranken.',
       arten: ['Schmetterlingsranke', 'Hängefarn', 'Kapkörbchen', 'Spargelfarn',
               'Fuchsschwanz', 'Glockenrebe']
@@ -5865,15 +5902,15 @@
   var premium = false;
 
   // Premium, die Pflanzensets, die Grosspakete, Deko-Sets und
-  // Einrichtungs-Sets sind alle Echtgeld: im Prototyp ohne echte Zahlung,
-  // aber mit CHF-Preis und ohne Münzabzug - genau wie die Muenzpakete
-  // selbst schon vorgemacht haben. Nur was am Ladencomputer einzeln bestellt
-  // wird, kostet weiter Münzen.
-  // Mit den zehn neuen Sets (dritte Runde, 2026-09-10) kosten alle 19
-  // Pflanzensets einzeln zusammen CHF 66.- statt CHF 24.-; CHF 15.- waere
-  // jetzt wieder viel zu billig fuer das grosse Sortiment. CHF 35.- haelt
+  // Einrichtungs-Sets liefen bisher auf Echtgeld: ein CHF-Preis ohne echten
+  // Abzug ("im Prototyp ohne echte Zahlung"), waehrend alles andere im
+  // Laden Muenzen kostete. Auf Wunsch jetzt ein einziges System - auch diese
+  // Zeilen ziehen echte Muenzen ab (siehe echtgeldZeile), im fertigen Spiel
+  // verkauft der App Store dann nur noch Muenzenpakete, keine Dutzend
+  // einzelnen Freischalt-Produkte mehr.
+  // Alle 19 Pflanzensets zusammen kosten einzeln 13200 Muenzen; Premium haelt
   // den Rabatt bei knapp der Haelfte (47%), bleibt aber ein echtes Bundle.
-  var PREMIUM_PREIS = 'CHF 35.—';
+  var PREMIUM_PREIS = 7000;
 
   function kaufePremium() {
     if (premium) return;
@@ -5895,19 +5932,71 @@
     return SPECIES[0];
   }
 
+  // "Pro Paket ein grosses Highlight reinpacken": statt immer der ersten Art
+  // im Set steht die teuerste - meist die auffaelligste - vorne und wird
+  // zum Kachelbild. Dasselbe fuer Deko-Sets, nur nach cost statt price.
+  function teuersteArt(namen) {
+    var beste = artNachName(namen[0]);
+    namen.forEach(function (n) {
+      var art = artNachName(n);
+      if (art.price > beste.price) beste = art;
+    });
+    return beste;
+  }
+
+  function teuerstesDeko(ids) {
+    var beste = DECOR.filter(function (d) { return d.id === ids[0]; })[0];
+    ids.forEach(function (id) {
+      var item = DECOR.filter(function (d) { return d.id === id; })[0];
+      if (item && (!beste || item.cost > beste.cost)) beste = item;
+    });
+    return beste;
+  }
+
+  // Tippt man auf die Kachel (nicht auf den Kaufknopf), zeigt ein Blatt alle
+  // Teile des Pakets einzeln - "man muss wissen was drin ist". Die teuerste
+  // Art/das teuerste Teil steht mit Stern zuerst.
+  function machPaketAnschaubar(row, titel, eintraege) {
+    row.classList.add('offer-vorschau');
+    row.addEventListener('click', function (e) {
+      if (e.target.closest('button')) return;
+      zeigePaketInhalt(titel, eintraege);
+    });
+  }
+
+  function zeigePaketInhalt(titel, eintraege) {
+    el.paketTitel.textContent = titel;
+    el.paketUntertitel.textContent = eintraege.length + (eintraege.length === 1 ? ' Teil in diesem Paket:' : ' Teile in diesem Paket:');
+    el.paketGrid.textContent = '';
+    eintraege.forEach(function (e, i) {
+      var kachel = document.createElement('div');
+      kachel.className = i === 0 ? 'paket-teil highlight' : 'paket-teil';
+      var img = document.createElement('img');
+      img.src = e.bild;
+      img.alt = '';
+      img.addEventListener('error', function () { img.style.visibility = 'hidden'; });
+      kachel.appendChild(img);
+      var name = document.createElement('span');
+      name.textContent = (i === 0 ? '✨ ' : '') + e.name;
+      kachel.appendChild(name);
+      el.paketGrid.appendChild(kachel);
+    });
+    el.paketSheet.hidden = false;
+  }
+
   // Erst als 20x derselben Art gebaut, dann klargestellt: gemeint war ein
   // Sortiment aus 20 VERSCHIEDENEN Pflanzen. Jedes Paket zieht reihum durch
   // mehrere Arten, damit auch bei 20 Stueck keine zwei Nachbarn gleich sind -
   // und bleibt bei ohnehin schon freien Arten, aus demselben Grund wie bei
   // den Grosspaketen zuvor: keine Abkuerzung an einem Pflanzenset vorbei.
   var GROSSPAKETE = [
-    { id: 'gross-gruen', name: 'Grünes Sortiment – 20 verschiedene', preis: 'CHF 5.—',
+    { id: 'gross-gruen', name: 'Grünes Sortiment – 20 verschiedene', preis: 350,
       arten: ['Calathea', 'Monstera', 'Zimmerlinde', 'Schwertfarn', 'Bogenhanf'],
-      note: 'Fünf Grünpflanzen-Arten gemischt, vier von jeder – füllt viele Regale auf einen Schlag.' },
-    { id: 'gross-bunt', name: 'Buntes Sortiment – 20 verschiedene', preis: 'CHF 5.—',
+      note: 'Fünf Grünpflanzen-Arten gemischt, vier von jeder – füllt viele Regale auf einen Schlag, günstiger als einzeln.' },
+    { id: 'gross-bunt', name: 'Buntes Sortiment – 20 verschiedene', preis: 300,
       arten: ['Calathea', 'Monstera', 'Zimmerlinde', 'Schwertfarn', 'Goldkugelkaktus',
               'Echeveria', 'Usambaraveilchen', 'Bogenhanf', 'Grünlilie'],
-      note: 'Alle freien Arten gemischt durch den ganzen Laden – kein Klicken, keine Münzen.' }
+      note: 'Alle freien Arten gemischt durch den ganzen Laden auf einen Schlag – kein Klicken.' }
   ];
   var GROSSPAKET_MENGE = 20;
 
@@ -5929,14 +6018,14 @@
 
   // -------------------------------------------------------------- Deko-Sets
   var DECO_SETS = [
-    { id: 'deko-licht', name: 'Licht-Set', preis: 'CHF 3.—',
-      note: 'Kerzen, Laterne und die LED-Kette zusammen.',
+    { id: 'deko-licht', name: 'Licht-Set', preis: 70,
+      note: 'Kerzen, Laterne und die LED-Kette zusammen, günstiger als einzeln.',
       teile: ['candles', 'lantern', 'led'] },
-    { id: 'deko-wand', name: 'Wand-Deko-Set', preis: 'CHF 3.—',
-      note: 'Bilder, Wandspiegel und Wimpelkette zusammen.',
+    { id: 'deko-wand', name: 'Wand-Deko-Set', preis: 55,
+      note: 'Bilder, Wandspiegel und Wimpelkette zusammen, günstiger als einzeln.',
       teile: ['art', 'mirror', 'bunting'] },
-    { id: 'deko-garten', name: 'Garten-Set', preis: 'CHF 4.—',
-      note: 'Gartenfackeln, Lichterkette und Stehlampe zusammen.',
+    { id: 'deko-garten', name: 'Garten-Set', preis: 90,
+      note: 'Gartenfackeln, Lichterkette und Stehlampe zusammen, günstiger als einzeln.',
       teile: ['torches', 'lights', 'lamp'] }
   ];
 
@@ -5961,11 +6050,11 @@
 
   // ------------------------------------------------------ Einrichtungs-Sets
   var EINRICHTUNG_SETS = [
-    { id: 'einricht-warm', name: 'Warmes Ambiente', preis: 'CHF 3.—',
-      note: 'Nussbaum-Holz, warmgraue Wände, dunkle Dielen – auf einen Klick.',
+    { id: 'einricht-warm', name: 'Warmes Ambiente', preis: 60,
+      note: 'Nussbaum-Holz, warmgraue Wände, dunkle Dielen – auf einen Klick, günstiger als einzeln.',
       holz: 'braun', wand: 'warmgrau', boden: 'holz-braun' },
-    { id: 'einricht-frisch', name: 'Frisches Grün', preis: 'CHF 3.—',
-      note: 'Salbei-Holz, salbeigrüne Wände, Zementfliesen – auf einen Klick.',
+    { id: 'einricht-frisch', name: 'Frisches Grün', preis: 65,
+      note: 'Salbei-Holz, salbeigrüne Wände, Zementfliesen – auf einen Klick, günstiger als einzeln.',
       holz: 'salbei', wand: 'salbei', boden: 'muster-zement' }
   ];
 
@@ -5983,8 +6072,8 @@
 
   // ------------------------------------------------------------ Raeume-Paket
   var RAEUME_PAKET = {
-    id: 'raeume-beide', name: 'Wintergarten + Feld', preis: 'CHF 4.—',
-    note: 'Beide Erweiterungen hinter dem Haus auf einen Schlag.'
+    id: 'raeume-beide', name: 'Wintergarten + Feld', preis: 240,
+    note: 'Beide Erweiterungen hinter dem Haus auf einen Schlag, günstiger als einzeln.'
   };
 
   function kaufeRaeumePaket() {
@@ -6036,7 +6125,13 @@
   var COIN_PACKS = [
     { id: 'p1', name: 'Handvoll Münzen', coins: 250, preis: 'CHF 1.—' },
     { id: 'p2', name: 'Beutel Münzen', coins: 800, preis: 'CHF 3.—' },
-    { id: 'p3', name: 'Kiste Münzen', coins: 2200, preis: 'CHF 7.—' }
+    { id: 'p3', name: 'Kiste Münzen', coins: 2200, preis: 'CHF 7.—' },
+    // Kein Muenzpaket im eigentlichen Sinn - die 60 Muenzen sind nur ein
+    // Dankeschoen, der Punkt ist die Tasse Kaffee fuer den Entwickler.
+    // Bewusst ein schlechter Muenzen-Kurs, damit niemand das als guenstigsten
+    // Weg zu Muenzen entdeckt statt als das, was es ist.
+    { id: 'p-kaffee', name: 'Kaffee für den Entwickler', coins: 60, preis: 'CHF 2.—', icon: '☕',
+      note: 'Kein Münzpaket, einfach ein Dankeschön – 60 Münzen als Beigabe · CHF 2.—' }
   ];
 
   var bought = {};
@@ -6147,14 +6242,24 @@
     list.appendChild(h);
   }
 
-  // Zwei Sorten Zeilen: Münzen (verdient, im Laden ausgegeben) und Echtgeld
-  // (CHF-Preis in der Notiz, „Kaufen“ ohne Münzabzug – im fertigen Spiel
-  // der Apple-Kaufdialog). Nie gemischt in derselben Kategorie, das war genau
-  // der Fehler bei den alten Pflanzen-„Paketen“ am Ladencomputer.
+  // Frueher zwei Waehrungen: Muenzen fuers Tagesgeschaeft, ein CHF-Preis ohne
+  // echten Abzug fuer Sets und Pakete ("im Prototyp ohne echte Zahlung"). Ein
+  // einziges System ist einfacher zu pflegen und im fertigen Spiel muss dann
+  // nur noch Muenzen im App Store verkauft werden - also zieht dieselbe Zeile
+  // jetzt wirklich Muenzen ab, statt sie nur anzuzeigen. Der Name blieb, auch
+  // wenn hier kein Echtgeld mehr fliesst - umbenennen wuerde jeden Aufrufer
+  // beruehren, ohne dass sich am Verhalten fuer den Spieler etwas aendert.
   function echtgeldZeile(list, icon, titel, note, preis, gekauft, kaufen) {
-    var row = offerRow(icon, titel, note, gekauft ? 'Gekauft' : preis, !gekauft, kaufen);
+    var row = offerRow(icon, titel, note, gekauft ? 'Gekauft' : preis + ' ●',
+      !gekauft && coins >= preis,
+      function () {
+        if (gekauft || coins < preis) return;
+        setCoins(coins - preis);
+        kaufen();
+      });
     row.classList.add('offer-cash');
     list.appendChild(row);
+    return row;
   }
 
   // Bei 19 Pflanzensets war eine einzige lange Liste nicht mehr zu
@@ -6173,7 +6278,8 @@
     PLANT_SETS.forEach(function (satz) {
       if (satz.cost === 0 || satz.cat !== inappPlantGroup) return;
       var frei = !!unlockedSets[satz.id];
-      echtgeldZeile(list, 'art/plants/' + plantSlug(satz.arten[0]) + '-terracotta.webp',
+      var beste = teuersteArt(satz.arten);
+      var row = echtgeldZeile(list, 'art/plants/' + plantSlug(beste.name) + '-terracotta.webp',
         satz.name, frei ? satz.arten.length + ' Arten freigeschaltet' : satz.note,
         satz.preis, frei,
         function () {
@@ -6181,19 +6287,39 @@
           say(satz.name + ' freigeschaltet – ' + satz.arten.length + ' neue Arten im Ladencomputer.');
           renderShop(); renderStore();
         });
+      var teile = satz.arten.slice().sort(function (a, b) { return artNachName(b).price - artNachName(a).price; })
+        .map(function (n) { return { bild: 'art/plants/' + plantSlug(n) + '-terracotta.webp', name: n }; });
+      machPaketAnschaubar(row, satz.name, teile);
     });
     abschnitt(list, 'Grosspakete – sofort geliefert');
     GROSSPAKETE.forEach(function (p) {
-      echtgeldZeile(list, 'art/plants/' + plantSlug(p.arten[0]) + '-terracotta.webp',
+      var beste = teuersteArt(p.arten);
+      var row = echtgeldZeile(list, 'art/plants/' + plantSlug(beste.name) + '-terracotta.webp',
         p.name, p.note, p.preis, false, function () { kaufeGrosspaket(p); });
+      var teile = p.arten.slice().sort(function (a, b) { return artNachName(b).price - artNachName(a).price; })
+        .map(function (n) { return { bild: 'art/plants/' + plantSlug(n) + '-terracotta.webp', name: n }; });
+      machPaketAnschaubar(row, p.name, teile);
     });
   }
 
   function renderInAppDeko(list) {
     abschnitt(list, 'Deko-Sets');
     DECO_SETS.forEach(function (set) {
-      echtgeldZeile(list, photo('dekoset-' + set.id, function () { return DECOR.filter(function (d) { return d.id === set.teile[0]; })[0].preview(); }),
+      var beste = teuerstesDeko(set.teile);
+      var row = echtgeldZeile(list, photo('dekoset-' + set.id, function () { return beste.preview(); }),
         set.name, set.note, set.preis, dekoSetFertig(set), function () { kaufeDekoSet(set); });
+      var teile = set.teile.slice()
+        .sort(function (a, b) {
+          var ia = DECOR.filter(function (d) { return d.id === a; })[0];
+          var ib = DECOR.filter(function (d) { return d.id === b; })[0];
+          return (ib ? ib.cost : 0) - (ia ? ia.cost : 0);
+        })
+        .map(function (id) {
+          var item = DECOR.filter(function (d) { return d.id === id; })[0];
+          return item ? { bild: photo('dekoset-teil-' + id, item.preview), name: item.name } : null;
+        })
+        .filter(Boolean);
+      machPaketAnschaubar(row, set.name, teile);
     });
   }
 
@@ -6219,7 +6345,7 @@
 
     var kopf = document.createElement('p');
     kopf.className = 'demo-note';
-    kopf.textContent = 'Im Prototyp ohne echte Zahlung: antippen schaltet frei.';
+    kopf.textContent = 'Grössere Pakete kosten mehr Münzen, dafür bekommst du mehr auf einen Schlag.';
     list.appendChild(kopf);
 
     abschnitt(list, 'Premium & Werbung');
@@ -6227,7 +6353,12 @@
       '👑', 'Premium – alles freigeschaltet',
       premium ? 'Aktiv – alle Pflanzensets sind offen.'
               : 'Schaltet alle Pflanzensets auf einmal frei.',
-      premium ? 'Aktiv' : PREMIUM_PREIS, !premium, kaufePremium);
+      premium ? 'Aktiv' : PREMIUM_PREIS + ' ●', !premium && coins >= PREMIUM_PREIS,
+      function () {
+        if (premium || coins < PREMIUM_PREIS) return;
+        setCoins(coins - PREMIUM_PREIS);
+        kaufePremium();
+      });
     premiumRow.classList.add('offer-cash');
     list.appendChild(premiumRow);
 
@@ -6242,8 +6373,8 @@
 
     abschnitt(list, 'Münzenpakete');
     COIN_PACKS.forEach(function (pack) {
-      list.appendChild(offerRow('🪙', pack.name,
-        pack.coins + ' Münzen · ' + pack.preis, 'Kaufen', true,
+      list.appendChild(offerRow(pack.icon || '🪙', pack.name,
+        pack.note || (pack.coins + ' Münzen · ' + pack.preis), 'Kaufen', true,
         function () {
           setCoins(coins + pack.coins);
           say(pack.name + ' gutgeschrieben: ' + pack.coins + ' Münzen.');
@@ -6446,7 +6577,7 @@
     if (shopTab === 'inapp') {
       var kopf2 = document.createElement('p');
       kopf2.className = 'demo-note cash-note';
-      kopf2.textContent = '👑 Echtgeld statt Münzen – im Prototyp ohne echte Zahlung. Dieselben Käufe stehen auch oben rechts im Münzenladen.';
+      kopf2.textContent = '👑 Dauerhafte Freischaltungen und grosse Pakete – kostet mehr Münzen als eine einzelne Bestellung. Dieselben Käufe stehen auch oben rechts im Münzenladen.';
       list.appendChild(kopf2);
 
       var INAPP_GRUPPEN = [
@@ -6729,6 +6860,11 @@
   el.shopClose.addEventListener('click', function () { el.shopSheet.hidden = true; });
   el.shopSheet.addEventListener('click', function (e) {
     if (e.target === el.shopSheet) el.shopSheet.hidden = true;
+  });
+
+  el.paketClose.addEventListener('click', function () { el.paketSheet.hidden = true; });
+  el.paketSheet.addEventListener('click', function (e) {
+    if (e.target === el.paketSheet) el.paketSheet.hidden = true;
   });
 
   // Selling by hand would mint coins out of nothing and undercut the coin
