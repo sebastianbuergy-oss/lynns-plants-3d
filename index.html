@@ -566,7 +566,7 @@
        und eine alte Fassung als "immer noch kaputt" durchging. Bei jeder
        Aenderung hochzaehlen. -->
   <div class="mark">
-    <b>Fleur-Blache’s Blumen</b><span>TESTVERSION &middot; V57</span>
+    <b>Fleur-Blache’s Blumen</b><span>TESTVERSION &middot; V58</span>
     <em id="premiumBadge" class="premium-badge" hidden>👑 Premium</em>
   </div>
   <div class="hud-right">
@@ -6261,8 +6261,6 @@
   var plantGroup = 'green';
   var buildGroup = 'racks';
   var decorGroup = 'wall';
-  var inappGroup = 'blumen';
-  var inappPlantGroup = 'green';
 
   function chipRow(groups, current, onPick) {
     var chips = document.createElement('div');
@@ -6387,30 +6385,32 @@
   // ueberblicken - "im inapp nicht nur pflanzen sondern die pflanzen in
   // ihren kategorien anbieten". Dieselben fuenf Kategorien wie im normalen
   // Pflanzen-Reiter, ueber PLANT_SETS.cat gefiltert.
+  // Bisher zwei Chip-Reihen uebereinander (Pakete: Blumen/Deko/... UND
+  // darunter nochmal Gruenpflanzen/Bluehend/...) - "ich finde es sehr
+  // unuebersichtlich". Eine Chip-Ebene verschwindet: alle fuenf Kategorien
+  // stehen jetzt nacheinander mit eigener Ueberschrift in einer Liste statt
+  // hinter einem zweiten Tipp versteckt.
   function renderInAppPflanzen(list) {
-    list.appendChild(chipRow(PLANT_GROUPS, inappPlantGroup, function (id) {
-      inappPlantGroup = id;
-      if (!el.shopSheet.hidden) renderShop();
-      if (!el.storeSheet.hidden) renderStore();
-    }));
-    var gruppe = PLANT_GROUPS[0];
-    PLANT_GROUPS.forEach(function (g) { if (g.id === inappPlantGroup) gruppe = g; });
-    abschnitt(list, gruppe.name + ' – dauerhaft freischalten');
-    PLANT_SETS.forEach(function (satz) {
-      if (satz.cost === 0 || satz.cat !== inappPlantGroup) return;
-      var frei = !!unlockedSets[satz.id];
-      var beste = teuersteArt(satz.arten);
-      var row = echtgeldZeile(list, 'art/plants/' + plantSlug(beste.name) + '-terracotta.webp',
-        satz.name, frei ? satz.arten.length + ' Arten freigeschaltet' : satz.note,
-        satz.preis, frei,
-        function () {
-          unlockedSets[satz.id] = true;
-          say(satz.name + ' freigeschaltet – ' + satz.arten.length + ' neue Arten im Ladencomputer.');
-          renderShop(); renderStore();
-        });
-      var teile = satz.arten.slice().sort(function (a, b) { return artNachName(b).price - artNachName(a).price; })
-        .map(function (n) { return { bild: 'art/plants/' + plantSlug(n) + '-terracotta.webp', name: n }; });
-      machPaketAnschaubar(row, satz.name, teile);
+    PLANT_GROUPS.forEach(function (gruppe) {
+      var hatSets = PLANT_SETS.some(function (s) { return s.cost !== 0 && s.cat === gruppe.id; });
+      if (!hatSets) return;
+      abschnitt(list, gruppe.name + ' – dauerhaft freischalten');
+      PLANT_SETS.forEach(function (satz) {
+        if (satz.cost === 0 || satz.cat !== gruppe.id) return;
+        var frei = !!unlockedSets[satz.id];
+        var beste = teuersteArt(satz.arten);
+        var row = echtgeldZeile(list, 'art/plants/' + plantSlug(beste.name) + '-terracotta.webp',
+          satz.name, frei ? satz.arten.length + ' Arten freigeschaltet' : satz.note,
+          satz.preis, frei,
+          function () {
+            unlockedSets[satz.id] = true;
+            say(satz.name + ' freigeschaltet – ' + satz.arten.length + ' neue Arten im Ladencomputer.');
+            renderShop(); renderStore();
+          });
+        var teile = satz.arten.slice().sort(function (a, b) { return artNachName(b).price - artNachName(a).price; })
+          .map(function (n) { return { bild: 'art/plants/' + plantSlug(n) + '-terracotta.webp', name: n }; });
+        machPaketAnschaubar(row, satz.name, teile);
+      });
     });
     abschnitt(list, 'Grosspakete – sofort geliefert');
     GROSSPAKETE.forEach(function (p) {
@@ -6713,18 +6713,14 @@
       kopf2.textContent = '👑 Dauerhafte Freischaltungen und grosse Pakete – kostet mehr Münzen als eine einzelne Bestellung. Dieselben Käufe stehen auch oben rechts im Münzenladen.';
       list.appendChild(kopf2);
 
-      var INAPP_GRUPPEN = [
-        { id: 'blumen', name: 'Blumen' },
-        { id: 'deko', name: 'Deko' },
-        { id: 'einrichten', name: 'Möbel & Farben' },
-        { id: 'raeume', name: 'Räume' }
-      ];
-      list.appendChild(chipRow(INAPP_GRUPPEN, inappGroup, function (id) { inappGroup = id; renderShop(); }));
-
-      if (inappGroup === 'deko') renderInAppDeko(list);
-      else if (inappGroup === 'einrichten') renderInAppEinrichten(list);
-      else if (inappGroup === 'raeume') renderInAppRaeume(list);
-      else renderInAppPflanzen(list);
+      // Frueher zwei Chip-Reihen (erst Blumen/Deko/Moebel/Raeume, dann darin
+      // nochmal fuenf Pflanzenkategorien) - "ich finde es sehr
+      // unuebersichtlich". Jetzt eine einzige Liste mit Ueberschriften statt
+      // zwei Klick-Ebenen, die man erst finden musste.
+      renderInAppPflanzen(list);
+      renderInAppDeko(list);
+      renderInAppEinrichten(list);
+      renderInAppRaeume(list);
       return;
     }
 
