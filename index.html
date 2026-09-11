@@ -571,7 +571,7 @@
        und eine alte Fassung als "immer noch kaputt" durchging. Bei jeder
        Aenderung hochzaehlen. -->
   <div class="mark">
-    <b>Fleur-Blache’s Blumen</b><span>TESTVERSION &middot; V59</span>
+    <b>Fleur-Blache’s Blumen</b><span>TESTVERSION &middot; V60</span>
     <em id="premiumBadge" class="premium-badge" hidden>👑 Premium</em>
   </div>
   <div class="hud-right">
@@ -5797,6 +5797,16 @@
   function setzeHolz(id) {
     gewaehlt.holz = id;
     setSurface(woodMat, 'holz-' + id, 2, 2);
+    // Seit jedes Regal/jeder Tisch sein eigenes Material hat (V57), haengt
+    // keine Regal-Mesh mehr an woodMat - die globale Wahl hier muesste sonst
+    // sichtbar ins Leere laufen. Jedes Stueck, das der Spieler nicht per
+    // eigener Holzwahl (machMoebelAnpassbar) angepasst hat, zieht also mit.
+    shelves.forEach(function (unit) {
+      if (!unit.holzMat || unit.holzCustom) return;
+      unit.holzId = id;
+      setSurface(unit.holzMat, 'holz-' + id, 2, 2);
+      delete photos['unit-' + unit.label];
+    });
   }
 
   // "Klick drauf und die Farbe/das Holz auswählen können" - bisher teilten
@@ -5819,6 +5829,7 @@
 
   function setzeMoebelHolz(unit, id) {
     unit.holzId = id;
+    unit.holzCustom = true;
     setSurface(unit.holzMat, 'holz-' + id, 2, 2);
     // Der Katalogschnappschuss ist gecacht (photo()) - ohne den Eintrag zu
     // loeschen wuerde die Kachel im Laden weiter das alte Holz zeigen.
