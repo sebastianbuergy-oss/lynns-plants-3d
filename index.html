@@ -435,33 +435,38 @@
     width:14px;height:14px;border-radius:50%;
     background:radial-gradient(circle at 35% 30%,#ffe9a8,#e0aa46);
   }
-  /* Mit dem vierten Reiter passt die Zeile auf einem schmalen Schirm nicht
-     mehr; umbrechen statt in einen Scrollstreifen schieben. Jeder Reiter
-     traegt schon im Ruhezustand seine eigene Farbe (ueber sein eigenes
-     data-tab, nicht ueber die Kartenvariable, die erst beim Anwaehlen
-     umschaltet) - so ist auf einen Blick zu sehen, dass In-App etwas
-     anderes ist als der Rest, nicht erst nach dem Antippen.       */
-  .tabs{display:flex;flex-wrap:wrap;gap:6px;margin:12px 0 10px}
-  .tabs button{
-    flex:0 0 auto;border:0;font:inherit;
-    min-height:44px;padding:7px 14px;border-radius:10px;
-    background:rgba(63,92,58,.1);color:var(--ink-soft);
-    font-size:11px;font-weight:800;cursor:pointer;
+  /* "nicht so.. das menü ganz anders machen" - weg von bunten Text-Reitern
+     oben (liefen bei fuenf Stueck ohnehin schon zweizeilig um), hin zu einer
+     schmalen Icon-Leiste an der Seite wie im Beispiel, das er geschickt hat.
+     Jedes Icon traegt seine Kategoriefarbe schon im Ruhezustand, genau wie
+     vorher bei den Text-Reitern - nur jetzt als Flaeche statt als Text. */
+  .shop-kategorie{
+    margin:10px 0 8px;font-family:var(--display);font-weight:700;
+    font-size:15px;color:var(--accent-deep);
   }
-  .tabs button[data-tab="plants"]{background:rgba(63,143,79,.14);color:#2c6a38}
-  .tabs button[data-tab="build"]{background:rgba(181,115,47,.14);color:#8a5620}
-  .tabs button[data-tab="decor"]{background:rgba(193,86,110,.14);color:#96384e}
-  .tabs button[data-tab="paint"]{background:rgba(47,127,149,.14);color:#215c6d}
-  .tabs button[data-tab="inapp"]{background:linear-gradient(120deg,#f6d98a,#e0aa46);color:#5c3d0a}
-  .tabs button.on{background:var(--accent);color:#fff}
-  .tabs button[data-tab="inapp"].on{background:linear-gradient(120deg,#f0c165,#c1852c);color:#3a2506}
-  .tabs button:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+  .shop-body{display:flex;gap:10px;align-items:flex-start;min-height:0}
+  .tabs-side{
+    display:flex;flex-direction:column;gap:8px;flex:0 0 auto;
+  }
+  .tabs-side button{
+    width:46px;height:46px;border:0;border-radius:13px;
+    font-size:21px;line-height:1;display:grid;place-items:center;
+    background:rgba(63,92,58,.1);color:var(--ink-soft);cursor:pointer;
+  }
+  .tabs-side button[data-tab="plants"]{background:rgba(63,143,79,.14)}
+  .tabs-side button[data-tab="build"]{background:rgba(181,115,47,.14)}
+  .tabs-side button[data-tab="decor"]{background:rgba(193,86,110,.14)}
+  .tabs-side button[data-tab="paint"]{background:rgba(47,127,149,.14)}
+  .tabs-side button[data-tab="inapp"]{background:linear-gradient(150deg,#f6d98a,#e0aa46)}
+  .tabs-side button.on{background:var(--accent);box-shadow:0 3px 8px rgba(20,30,15,.22)}
+  .tabs-side button[data-tab="inapp"].on{background:linear-gradient(150deg,#f0c165,#c1852c)}
+  .tabs-side button:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
   /* Kacheln statt Liste: zwei Spalten, jede Zeile (Kategorie-Ueberschrift,
      Hinweistext, Chip-Reihe) spannt ueber beide, damit nur die Angebote
      selbst gekachelt werden. */
   .shop-list{
     display:grid;grid-template-columns:repeat(2,1fr);
-    gap:10px;align-content:start;
+    gap:8px;align-content:start;flex:1;min-width:0;
     max-height:52vh;overflow-y:auto;padding:2px 2px 4px;
   }
   .shop-list>.chips{grid-column:1/-1}
@@ -566,7 +571,7 @@
        und eine alte Fassung als "immer noch kaputt" durchging. Bei jeder
        Aenderung hochzaehlen. -->
   <div class="mark">
-    <b>Fleur-Blache’s Blumen</b><span>TESTVERSION &middot; V58</span>
+    <b>Fleur-Blache’s Blumen</b><span>TESTVERSION &middot; V59</span>
     <em id="premiumBadge" class="premium-badge" hidden>👑 Premium</em>
   </div>
   <div class="hud-right">
@@ -605,14 +610,17 @@
       </div>
       <div class="shop-purse"><i></i><b id="shopCoins">1000</b></div>
     </div>
-    <div class="tabs" id="shopTabs">
-      <button type="button" data-tab="plants" class="on">Pflanzen</button>
-      <button type="button" data-tab="build">Regale &amp; Räume</button>
-      <button type="button" data-tab="decor">Deko</button>
-      <button type="button" data-tab="paint">Einrichten</button>
-      <button type="button" data-tab="inapp">Pakete 👑</button>
+    <p class="shop-kategorie" id="shopKategorie">Pflanzen</p>
+    <div class="shop-body">
+      <div class="tabs-side" id="shopTabs">
+        <button type="button" data-tab="plants" class="on" aria-label="Pflanzen">🌿</button>
+        <button type="button" data-tab="build" aria-label="Regale &amp; Räume">🗄️</button>
+        <button type="button" data-tab="decor" aria-label="Deko">🎀</button>
+        <button type="button" data-tab="paint" aria-label="Einrichten">🎨</button>
+        <button type="button" data-tab="inapp" aria-label="Pakete">👑</button>
+      </div>
+      <div class="shop-list" id="shopList"></div>
     </div>
-    <div class="shop-list" id="shopList"></div>
     <button type="button" class="sheet-close" id="shopClose">Schliessen</button>
   </div>
 </div>
@@ -4584,6 +4592,7 @@
     back: document.getElementById('backBtn'),
     shopSheet: document.getElementById('shopSheet'),
     shopCard: document.getElementById('shopCard'),
+    shopKategorie: document.getElementById('shopKategorie'),
     shopTabs: document.getElementById('shopTabs'),
     shopList: document.getElementById('shopList'),
     shopClose: document.getElementById('shopClose'),
@@ -6973,6 +6982,7 @@
     if (!button) return;
     shopTab = button.dataset.tab;
     el.shopCard.dataset.tab = shopTab;
+    el.shopKategorie.textContent = button.getAttribute('aria-label');
     Array.prototype.forEach.call(el.shopTabs.children, function (tab) {
       tab.classList.toggle('on', tab === button);
     });
