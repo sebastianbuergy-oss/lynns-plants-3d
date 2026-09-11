@@ -571,7 +571,7 @@
        und eine alte Fassung als "immer noch kaputt" durchging. Bei jeder
        Aenderung hochzaehlen. -->
   <div class="mark">
-    <b>Fleur-Blache’s Blumen</b><span>TESTVERSION &middot; V60</span>
+    <b>Fleur-Blache’s Blumen</b><span>TESTVERSION &middot; V61</span>
     <em id="premiumBadge" class="premium-badge" hidden>👑 Premium</em>
   </div>
   <div class="hud-right">
@@ -5218,6 +5218,211 @@
     return group;
   }
 
+  // ------------------------------------------------------- Gadgets (V61)
+  // "ganz viel gadgets, neuzeitmaessig, speziell, lustig, ausgefallen" - eine
+  // ganze neue Kategorie, komplett aus Geometrie und Canvas-Texturen gebaut,
+  // keine einzige davon braucht eine gemalte Datei. Absichtlich so, solange
+  // ComfyUI nicht laeuft: echte neue Pflanzenarten und Topf-Skins brauchen den
+  // Renderer, diese Deko nicht - sie ist ab sofort spielbar, nicht erst nach
+  // der naechsten Kunstrunde.
+  var discoFacetGeo = new THREE.IcosahedronGeometry(1, 1).toNonIndexed();
+
+  function discoBallGruppe(r) {
+    var group = new THREE.Group();
+    var ball = new THREE.Mesh(discoFacetGeo,
+      new THREE.MeshStandardMaterial({ color: '#e9eef2', metalness: 1, roughness: 0.28, flatShading: true }));
+    ball.scale.setScalar(r);
+    group.add(ball);
+    var wire = new THREE.Mesh(new THREE.CylinderGeometry(0.006, 0.006, 0.4, 5), darkMat);
+    wire.position.y = r + 0.2;
+    group.add(wire);
+    return group;
+  }
+
+  // Neonschrift als Canvas statt gemalte Datei - der Leuchtrand kommt aus
+  // mehrfach uebermaltem Schlagschatten (shadowBlur), kein Font-Download noetig.
+  function neonTextur(text, glowFarbe) {
+    var c = document.createElement('canvas');
+    c.width = 512; c.height = 200;
+    var g = c.getContext('2d');
+    g.textAlign = 'center';
+    g.textBaseline = 'middle';
+    g.font = "italic 700 84px 'Brush Script MT', 'Segoe Script', cursive";
+    g.shadowColor = glowFarbe;
+    g.shadowBlur = 26;
+    g.fillStyle = glowFarbe;
+    for (var i = 0; i < 4; i++) g.fillText(text, 256, 104);
+    g.shadowBlur = 6;
+    g.fillStyle = '#fffaf4';
+    g.fillText(text, 256, 104);
+    var t = new THREE.CanvasTexture(c);
+    t.encoding = THREE.sRGBEncoding;
+    return t;
+  }
+
+  function neonSchildGruppe(text, farbe) {
+    var group = new THREE.Group();
+    var w = 0.95, h = w * 200 / 512;
+    var platte = new THREE.Mesh(new THREE.BoxGeometry(w * 1.14, h * 1.55, 0.02),
+      new THREE.MeshStandardMaterial({ color: '#20242b', roughness: 0.6 }));
+    platte.position.z = -0.012;
+    group.add(platte);
+    var schild = new THREE.Mesh(new THREE.PlaneGeometry(w, h),
+      new THREE.MeshBasicMaterial({ map: neonTextur(text, farbe), transparent: true, side: THREE.DoubleSide }));
+    group.add(schild);
+    return group;
+  }
+
+  function terrariumGruppe() {
+    var group = new THREE.Group();
+    var base = new THREE.Mesh(new THREE.CylinderGeometry(0.125, 0.135, 0.03, 20), frameWood);
+    base.position.y = 0.015;
+    group.add(base);
+    var erde = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.1, 0.015, 16), soilMat);
+    erde.position.y = 0.038;
+    group.add(erde);
+    for (var i = 0; i < 6; i++) {
+      var tuft = new THREE.Mesh(leafGeo,
+        new THREE.MeshStandardMaterial({ color: i % 2 ? '#3c7a44' : '#5a9a5c', roughness: 0.7 }));
+      var a = Math.random() * Math.PI * 2, r = Math.random() * 0.07;
+      tuft.scale.set(0.035 + Math.random() * 0.02, 0.03, 0.035 + Math.random() * 0.02);
+      tuft.position.set(Math.cos(a) * r, 0.05 + Math.random() * 0.02, Math.sin(a) * r);
+      group.add(tuft);
+    }
+    var glass = new THREE.Mesh(
+      new THREE.SphereGeometry(0.135, 16, 10, 0, Math.PI * 2, 0, Math.PI * 0.56),
+      new THREE.MeshStandardMaterial({ color: '#eaf5ef', transparent: true, opacity: 0.32, roughness: 0.1, metalness: 0.15, side: THREE.DoubleSide })
+    );
+    glass.position.y = 0.05;
+    group.add(glass);
+    var knob = new THREE.Mesh(new THREE.SphereGeometry(0.016, 8, 6), frameWood);
+    knob.position.y = 0.05 + 0.135 * 0.44;
+    group.add(knob);
+    return group;
+  }
+
+  function pilzLampeGruppe() {
+    var group = new THREE.Group();
+    var stem = new THREE.Mesh(new THREE.CylinderGeometry(0.028, 0.038, 0.16, 10),
+      new THREE.MeshStandardMaterial({ color: '#f3ead9', roughness: 0.65 }));
+    stem.position.y = 0.08;
+    group.add(stem);
+    var cap = new THREE.Mesh(
+      new THREE.SphereGeometry(0.1, 16, 10, 0, Math.PI * 2, 0, Math.PI * 0.52),
+      new THREE.MeshStandardMaterial({ color: '#d1685a', roughness: 0.5, emissive: '#5c1c12', emissiveIntensity: 0.35 })
+    );
+    cap.position.y = 0.16;
+    group.add(cap);
+    for (var i = 0; i < 6; i++) {
+      var spot = new THREE.Mesh(new THREE.SphereGeometry(0.011, 6, 5),
+        new THREE.MeshStandardMaterial({ color: '#fff8ee' }));
+      var a = Math.random() * Math.PI * 2, r = 0.035 + Math.random() * 0.045;
+      spot.position.set(Math.cos(a) * r, 0.175 + Math.random() * 0.02, Math.sin(a) * r);
+      group.add(spot);
+    }
+    return group;
+  }
+
+  function wolkenLampeGruppe() {
+    var group = new THREE.Group();
+    var mat = new THREE.MeshStandardMaterial({ color: '#fbfaf6', roughness: 0.85, emissive: '#ffdca0', emissiveIntensity: 0.18 });
+    var lobes = [[0, 0, 0, 0.14], [0.11, -0.02, 0.03, 0.1], [-0.11, -0.01, -0.02, 0.1],
+      [0.04, 0.05, 0.08, 0.09], [-0.06, 0.04, -0.07, 0.09]];
+    lobes.forEach(function (l) {
+      var lobe = new THREE.Mesh(new THREE.SphereGeometry(l[3], 12, 8), mat);
+      lobe.position.set(l[0], l[1], l[2]);
+      group.add(lobe);
+    });
+    var wire = new THREE.Mesh(new THREE.CylinderGeometry(0.005, 0.005, 0.4, 5), darkMat);
+    wire.position.y = 0.22;
+    group.add(wire);
+    return group;
+  }
+
+  function kristallClusterGruppe() {
+    var group = new THREE.Group();
+    var farben = ['#b493d1', '#9a78c9', '#c9a8e0'];
+    for (var i = 0; i < 5; i++) {
+      var h = 0.09 + Math.random() * 0.09;
+      var crystal = new THREE.Mesh(new THREE.ConeGeometry(0.025 + Math.random() * 0.015, h, 6),
+        new THREE.MeshStandardMaterial({ color: farben[i % farben.length], roughness: 0.25, metalness: 0.2, flatShading: true }));
+      crystal.position.set((Math.random() - 0.5) * 0.09, h / 2, (Math.random() - 0.5) * 0.09);
+      crystal.rotation.set((Math.random() - 0.5) * 0.3, Math.random() * Math.PI, (Math.random() - 0.5) * 0.3);
+      group.add(crystal);
+    }
+    var base = new THREE.Mesh(new THREE.CylinderGeometry(0.075, 0.08, 0.02, 12),
+      new THREE.MeshStandardMaterial({ color: '#8a7a6a', roughness: 0.8 }));
+    base.position.y = -0.01;
+    group.add(base);
+    return group;
+  }
+
+  // "Toepfe in Geisterform" - ein eigener kleiner Uebertopf statt einer
+  // neuen Topf-Ausfuehrung fuer alle 131 Pflanzenarten (das braeuchte fuer
+  // jede Art ein neues Rendering, siehe ComfyUI-Hinweis oben).
+  function geisterTopfGruppe() {
+    var group = new THREE.Group();
+    var mat = new THREE.MeshStandardMaterial({ color: '#f6f3ec', roughness: 0.6 });
+    var kopf = new THREE.Mesh(new THREE.SphereGeometry(0.09, 16, 12, 0, Math.PI * 2, 0, Math.PI * 0.62), mat);
+    kopf.position.y = 0.1;
+    group.add(kopf);
+    var rock = new THREE.Mesh(new THREE.CylinderGeometry(0.09, 0.07, 0.09, 16), mat);
+    rock.position.y = 0.045;
+    group.add(rock);
+    for (var i = 0; i < 6; i++) {
+      var a = i / 6 * Math.PI * 2;
+      var welle = new THREE.Mesh(new THREE.SphereGeometry(0.022, 8, 6), mat);
+      welle.position.set(Math.cos(a) * 0.085, 0.005, Math.sin(a) * 0.085);
+      group.add(welle);
+    }
+    [-0.03, 0.03].forEach(function (x) {
+      var auge = new THREE.Mesh(new THREE.SphereGeometry(0.009, 6, 5), darkMat);
+      auge.position.set(x, 0.11, 0.083);
+      group.add(auge);
+    });
+    var tuft = new THREE.Mesh(leafGeo, new THREE.MeshStandardMaterial({ color: '#3c7a44', roughness: 0.7 }));
+    tuft.scale.set(0.045, 0.05, 0.045);
+    tuft.position.y = 0.21;
+    group.add(tuft);
+    return group;
+  }
+
+  function plattenspielerGruppe() {
+    var group = new THREE.Group();
+    var box = new THREE.Mesh(new THREE.BoxGeometry(0.34, 0.06, 0.28), frameWood);
+    box.position.y = 0.03;
+    group.add(box);
+    var plate = new THREE.Mesh(new THREE.CylinderGeometry(0.11, 0.11, 0.006, 24), darkMat);
+    plate.position.set(-0.03, 0.063, 0);
+    group.add(plate);
+    var label = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.03, 0.007, 16),
+      new THREE.MeshStandardMaterial({ color: '#c2452f', roughness: 0.5 }));
+    label.position.set(-0.03, 0.064, 0);
+    group.add(label);
+    var arm = new THREE.Mesh(new THREE.CylinderGeometry(0.004, 0.004, 0.13, 6), darkMat);
+    arm.position.set(0.1, 0.075, -0.06);
+    arm.rotation.z = Math.PI / 2;
+    arm.rotation.y = 0.4;
+    group.add(arm);
+    return group;
+  }
+
+  // Kleiner Beistelltisch fuer Gadgets, die keinen eigenen Platz auf der
+  // Theke oder einem Regal haben - staffiert eine sonst leere Ecke aus.
+  function beistelltischGruppe(h) {
+    var group = new THREE.Group();
+    var platte = new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.22, 0.03, 20), frameWood);
+    platte.position.y = h;
+    group.add(platte);
+    var bein = new THREE.Mesh(new THREE.CylinderGeometry(0.025, 0.03, h, 8), frameWood);
+    bein.position.y = h / 2;
+    group.add(bein);
+    var fuss = new THREE.Mesh(new THREE.CylinderGeometry(0.14, 0.14, 0.02, 20), frameWood);
+    fuss.position.y = 0.01;
+    group.add(fuss);
+    return group;
+  }
+
   var DECOR = [
     {
       id: 'candles', name: 'Kerzen für die Theke', cost: 16, cat: 'light',
@@ -5581,6 +5786,121 @@
           );
         });
         buildBulbs();
+      }
+    },
+    {
+      id: 'discoball', name: 'Discokugel', cost: 40, cat: 'gadget',
+      note: 'Spiegelkugel unter der Decke, wirft kleine Lichtpunkte durch den Laden.',
+      preview: function () { return discoBallGruppe(0.16); },
+      place: function () {
+        var ball = discoBallGruppe(0.22);
+        ball.position.set(1.2, WALL_H - 0.5, -1.0);
+        markShadow(ball, true);
+        scene.add(ball);
+        var glow = new THREE.PointLight('#ffe3b0', 0.5, 5, 2);
+        glow.position.copy(ball.position);
+        scene.add(glow);
+      }
+    },
+    {
+      id: 'neon', name: 'Neonschild «Bloom»', cost: 36, cat: 'gadget',
+      note: 'Handgezeichnetes Leuchtschild, rosa auf dunkler Platte.',
+      preview: function () { return neonSchildGruppe('Bloom', '#ff5fa8'); },
+      place: function () {
+        var schild = neonSchildGruppe('Bloom', '#ff5fa8');
+        schild.position.set(ROOM_W / 2 - 0.06, 2.05, 1.7);
+        schild.rotation.y = -Math.PI / 2;
+        scene.add(schild);
+        var glow = new THREE.PointLight('#ff5fa8', 0.4, 3.5, 2);
+        glow.position.set(ROOM_W / 2 - 0.3, 2.05, 1.7);
+        scene.add(glow);
+      }
+    },
+    {
+      id: 'terrarium', name: 'Mini-Gewächshaus unter Glas', cost: 32, cat: 'gadget',
+      note: 'Winziges Moos-Terrarium auf einem eigenen Beistelltisch.',
+      preview: function () { return terrariumGruppe(); },
+      place: function () {
+        var group = new THREE.Group();
+        var tisch = beistelltischGruppe(0.42);
+        group.add(tisch);
+        var glas = terrariumGruppe();
+        glas.position.y = 0.435;
+        group.add(glas);
+        group.position.set(2.0, 0, -4.0);
+        markShadow(group);
+        scene.add(group);
+      }
+    },
+    {
+      id: 'mushroomlamp', name: 'Pilzlämpchen', cost: 24, cat: 'gadget',
+      note: 'Kleine leuchtende Pilzlampe für die Theke.',
+      preview: function () { return pilzLampeGruppe(); },
+      place: function () {
+        var lamp = pilzLampeGruppe();
+        lamp.position.set(0.95, 1.08, -0.15);
+        counter.add(lamp);
+        var glow = new THREE.PointLight('#ffb37a', 0.4, 2.6, 2);
+        glow.position.set(0.95, 1.24, -0.15);
+        counter.add(glow);
+      }
+    },
+    {
+      id: 'cloudlamp', name: 'Wolkenlampe', cost: 34, cat: 'gadget',
+      note: 'Weiche Wolke von der Decke, warmes Licht von innen.',
+      preview: function () { return wolkenLampeGruppe(); },
+      place: function () {
+        var wolke = wolkenLampeGruppe();
+        wolke.position.set(-3.0, WALL_H - 0.6, 2.0);
+        markShadow(wolke, true);
+        scene.add(wolke);
+        var glow = new THREE.PointLight('#ffcf9a', 0.55, 3.6, 2);
+        glow.position.copy(wolke.position);
+        scene.add(glow);
+      }
+    },
+    {
+      id: 'crystals', name: 'Kristall-Cluster', cost: 20, cat: 'gadget',
+      note: 'Amethyst-Deko für die Theke.',
+      preview: function () { return kristallClusterGruppe(); },
+      place: function () {
+        var kristalle = kristallClusterGruppe();
+        kristalle.position.set(-1.0, 1.08, -0.15);
+        counter.add(kristalle);
+      }
+    },
+    {
+      id: 'ghostpots', name: 'Geister-Übertöpfe', cost: 22, cat: 'gadget',
+      note: 'Zwei kleine Übertöpfe in Geisterform, mit Grün obendrauf.',
+      preview: function () { return geisterTopfGruppe(); },
+      place: function () {
+        var group = new THREE.Group();
+        var tisch = beistelltischGruppe(0.38);
+        group.add(tisch);
+        [-0.09, 0.09].forEach(function (dx, i) {
+          var geist = geisterTopfGruppe();
+          geist.position.set(dx, 0.395, i ? -0.03 : 0.03);
+          group.add(geist);
+        });
+        group.position.set(-2.0, 0, 3.6);
+        markShadow(group);
+        scene.add(group);
+      }
+    },
+    {
+      id: 'recordplayer', name: 'Retro-Plattenspieler', cost: 30, cat: 'gadget',
+      note: 'Koffer-Plattenspieler mit Vinyl, auf eigenem Tischchen.',
+      preview: function () { return plattenspielerGruppe(); },
+      place: function () {
+        var group = new THREE.Group();
+        var tisch = beistelltischGruppe(0.42);
+        group.add(tisch);
+        var player = plattenspielerGruppe();
+        player.position.y = 0.435;
+        group.add(player);
+        group.position.set(-4.0, 0, 0.5);
+        markShadow(group);
+        scene.add(group);
       }
     }
   ];
@@ -6749,7 +7069,8 @@
         { id: 'wall', name: 'Wand' },
         { id: 'light', name: 'Licht' },
         { id: 'plants', name: 'Pflanzendeko' },
-        { id: 'floor', name: 'Extras' }
+        { id: 'floor', name: 'Extras' },
+        { id: 'gadget', name: 'Gadgets' }
       ];
       list.appendChild(chipRow(DECOR_GROUPS, decorGroup, function (id) { decorGroup = id; renderShop(); }));
       DECOR.filter(function (item) { return item.cat === decorGroup; }).forEach(function (item) {
