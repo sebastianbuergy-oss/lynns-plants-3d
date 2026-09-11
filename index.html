@@ -559,7 +559,7 @@
        und eine alte Fassung als "immer noch kaputt" durchging. Bei jeder
        Aenderung hochzaehlen. -->
   <div class="mark">
-    <b>Fleur-Blache’s Blumen</b><span>TESTVERSION &middot; V55</span>
+    <b>Fleur-Blache’s Blumen</b><span>TESTVERSION &middot; V56</span>
     <em id="premiumBadge" class="premium-badge" hidden>👑 Premium</em>
   </div>
   <div class="hud-right">
@@ -1928,7 +1928,7 @@
     new THREE.MeshStandardMaterial({ color: '#7d9a7a', roughness: 0.8 }),
     new THREE.MeshStandardMaterial({ color: '#a86a8f', roughness: 0.8 })
   ];
-  // Vorher ein einfarbiges Braun - aus der Naehe (Anzuchtbeet im Wintergarten)
+  // Vorher ein einfarbiges Braun - aus der Naehe (Anzuchtbeet im Aufzuchthaus)
   // sah das wie eine glatte Plastikplatte aus, nicht wie Erde. Ein paar
   // hundert zufaellige Krumen loesen die Flaeche auf, ohne dass es dafuer
   // eine gemalte Textur braucht.
@@ -4740,7 +4740,7 @@
     return free;
   }
 
-  // Samen wachsen nur in echten Beeten (Wintergarten, Feld) - nie auf einem
+  // Samen wachsen nur in echten Beeten (Aufzuchthaus, Feld) - nie auf einem
   // Regalbrett. slot.plant ist waehrend des Wachsens schon gesetzt (das
   // Saemling-Modell selbst), darum zaehlt ein belegtes Beet-Slot separat mit.
   function openBedSlots() {
@@ -5032,7 +5032,7 @@
     buildBed(0.2, mitteZ - 0.6, 'Anzuchtbeet rechts');
     guestSpots.push({ x: -3.2, z: mitteZ + 0.9 }, { x: 0.2, z: mitteZ + 0.9 });
 
-    // Zwei Bodenpflanzen fest dazu, kein Kauf - sonst waere der Wintergarten
+    // Zwei Bodenpflanzen fest dazu, kein Kauf - sonst waere das Aufzuchthaus
     // nur zwei Kisten unter Glas, kein Raum zum Verweilen. Keine Ampel hier:
     // deren Schnur haengt bis zur Ladendecke (WALL_H) hoch, hier gibt es nur
     // das schraege Glasdach, das waere durchs Glas gestochen.
@@ -5990,10 +5990,10 @@
   // und bleibt bei ohnehin schon freien Arten, aus demselben Grund wie bei
   // den Grosspaketen zuvor: keine Abkuerzung an einem Pflanzenset vorbei.
   var GROSSPAKETE = [
-    { id: 'gross-gruen', name: 'Grünes Sortiment – 20 verschiedene', preis: 350,
+    { id: 'gross-gruen', name: 'Grünes Sortiment', preis: 350,
       arten: ['Calathea', 'Monstera', 'Zimmerlinde', 'Schwertfarn', 'Bogenhanf'],
       note: 'Fünf Grünpflanzen-Arten gemischt, vier von jeder – füllt viele Regale auf einen Schlag, günstiger als einzeln.' },
-    { id: 'gross-bunt', name: 'Buntes Sortiment – 20 verschiedene', preis: 300,
+    { id: 'gross-bunt', name: 'Buntes Sortiment', preis: 300,
       arten: ['Calathea', 'Monstera', 'Zimmerlinde', 'Schwertfarn', 'Goldkugelkaktus',
               'Echeveria', 'Usambaraveilchen', 'Bogenhanf', 'Grünlilie'],
       note: 'Alle freien Arten gemischt durch den ganzen Laden auf einen Schlag – kein Klicken.' }
@@ -6070,9 +6070,16 @@
     say(set.name + ' angewendet.');
   }
 
+  // 120/180 waren aus der Zeit vor den grossen Pflanzensets (bis zu 1000,
+  // Premium 7000) - daneben wirkte eine ganze neue Raumerweiterung guenstiger
+  // als ein einzelnes Regal (45). "Der grosse Aussenbereich nur fuer 180?
+  // Das geht gar nicht" - jetzt auf Augenhoehe mit dem Rest des Ladens.
+  var AUFZUCHTHAUS_PREIS = 600;
+  var FELD_PREIS = 900;
+
   // ------------------------------------------------------------ Raeume-Paket
   var RAEUME_PAKET = {
-    id: 'raeume-beide', name: 'Wintergarten + Feld', preis: 240,
+    id: 'raeume-beide', name: 'Aufzuchthaus + Feld', preis: 1100,
     note: 'Beide Erweiterungen hinter dem Haus auf einen Schlag, günstiger als einzeln.'
   };
 
@@ -6081,7 +6088,7 @@
     if (!outdoor) openGreenhouse();
     if (!meadowBought) openMeadow();
     bought[RAEUME_PAKET.id] = true;
-    if (!beideSchonDa) say('Wintergarten und Feld stehen bereit.');
+    if (!beideSchonDa) say('Aufzuchthaus und Feld stehen bereit.');
     renderShop();
     renderStore();
   }
@@ -6294,11 +6301,16 @@
     abschnitt(list, 'Grosspakete – sofort geliefert');
     GROSSPAKETE.forEach(function (p) {
       var beste = teuersteArt(p.arten);
+      // "20 verschiedene" las sich wie 20 verschiedene Arten - tatsaechlich
+      // sind es GROSSPAKET_MENGE Stueck aus arten.length Sorten gemischt.
+      // Falsch beschriftet faellt das erst auf, wenn man reinschaut - und
+      // seit der Paket-Vorschau (V55) sieht das jeder sofort.
+      var titel = p.name + ' – ' + GROSSPAKET_MENGE + ' Stück, ' + p.arten.length + ' Sorten';
       var row = echtgeldZeile(list, 'art/plants/' + plantSlug(beste.name) + '-terracotta.webp',
-        p.name, p.note, p.preis, false, function () { kaufeGrosspaket(p); });
+        titel, p.note, p.preis, false, function () { kaufeGrosspaket(p); });
       var teile = p.arten.slice().sort(function (a, b) { return artNachName(b).price - artNachName(a).price; })
         .map(function (n) { return { bild: 'art/plants/' + plantSlug(n) + '-terracotta.webp', name: n }; });
-      machPaketAnschaubar(row, p.name, teile);
+      machPaketAnschaubar(row, titel, teile);
     });
   }
 
@@ -6446,8 +6458,8 @@
       hint.className = 'demo-note';
       hint.textContent = plantGroup === 'samen'
         ? (freieBeete
-            ? freieBeete + ' freie Plätze in Anzuchtbeeten (Wintergarten, Feld).'
-            : 'Noch kein Anzuchtbeet frei. Wintergarten oder Feld hinterm Haus bestellen.')
+            ? freieBeete + ' freie Plätze in Anzuchtbeeten (Aufzuchthaus, Feld).'
+            : 'Noch kein Anzuchtbeet frei. Aufzuchthaus oder Feld hinterm Haus bestellen.')
         : (free
             ? free + ' freie Plätze auf Regalen, Tischen und Beeten.'
             : 'Noch kein Platz. Bestelle zuerst ein Regal oder einen Tisch.');
@@ -6517,6 +6529,7 @@
             da ? 'Angestellt' : (offen ? p.kosten + ' ●' : 'Stufe ' + p.stufe),
             !da && offen && coins >= p.kosten,
             function () {
+              if (da || !offen || coins < p.kosten) return;
               setCoins(coins - p.kosten);
               bought['personal-' + p.id] = true;
               stelleEin(p.id);
@@ -6527,21 +6540,23 @@
       }
 
       if (buildGroup === 'rooms') {
-        list.appendChild(offerRow('\u2302', 'Wintergarten',
-          outdoor ? 'Der Wintergarten steht \u2013 zwei Anzuchtbeete f\u00fcr Samen warten unter dem Glasdach.' : 'Hinter dem Laden: Hintert\u00fcr auf, Holzdeck unter Glas, zwei Anzuchtbeete f\u00fcr Samen.',
-          outdoor ? 'Gekauft' : '120 \u25cf', !outdoor && coins >= 120,
+        list.appendChild(offerRow('\u2302', 'Aufzuchthaus',
+          outdoor ? 'Das Aufzuchthaus steht \u2013 zwei Anzuchtbeete f\u00fcr Samen warten unter dem Glasdach.' : 'Hinter dem Laden: Hintert\u00fcr auf, Holzdeck unter Glas, zwei Anzuchtbeete f\u00fcr Samen.',
+          outdoor ? 'Gekauft' : AUFZUCHTHAUS_PREIS + ' \u25cf', !outdoor && coins >= AUFZUCHTHAUS_PREIS,
           function () {
-            setCoins(coins - 120);
+            if (outdoor || coins < AUFZUCHTHAUS_PREIS) return;
+            setCoins(coins - AUFZUCHTHAUS_PREIS);
             openGreenhouse();
             renderShop();
-            say('Der Wintergarten steht \u2013 Lynn geht durch die Hintert\u00fcr hinaus.');
+            say('Das Aufzuchthaus steht \u2013 Lynn geht durch die Hintert\u00fcr hinaus.');
           }));
         list.appendChild(offerRow('\u2698', 'Feld hinterm Haus',
           meadowBought ? 'Vier Hochbeete stehen bereit \u2013 auch f\u00fcr Samen.'
                        : 'Das Bauland hinter dem Laden: Zaun, Gartenweg und vier Hochbeete f\u00fcr Samen.',
-          meadowBought ? 'Gekauft' : '180 \u25cf', !meadowBought && coins >= 180,
+          meadowBought ? 'Gekauft' : FELD_PREIS + ' \u25cf', !meadowBought && coins >= FELD_PREIS,
           function () {
-            setCoins(coins - 180);
+            if (meadowBought || coins < FELD_PREIS) return;
+            setCoins(coins - FELD_PREIS);
             openMeadow();
             renderShop();
           }));
@@ -6566,6 +6581,7 @@
         list.appendChild(offerRow(unitPhoto(item.unit), item.unit.label, state, label,
           !item.unit.built && !item.unit.ordered && coins >= item.cost,
           function () {
+            if (item.unit.built || item.unit.ordered || coins < item.cost) return;
             setCoins(coins - item.cost);
             deliverUnit(item.unit, item.unit.label);
             renderShop();
@@ -6609,6 +6625,7 @@
           bought[item.id] ? 'Gekauft' : item.cost + ' \u25cf',
           !bought[item.id] && coins >= item.cost,
           function () {
+            if (bought[item.id] || coins < item.cost) return;
             setCoins(coins - item.cost);
             bought[item.id] = true;
             item.place();
@@ -7096,6 +7113,13 @@
     }
     if (groundPoint) {
       walkTo(lynn, groundPoint.x, groundPoint.z);
+      // Bisher blieb die Kamera stehen, wenn man auf offenen Boden tippte -
+      // Lynn lief los, das Bild nicht mit. Drinnen fiel das kaum auf (alles
+      // passt ins Bild), draussen auf der Wiese lief sie schnell aus dem
+      // Rahmen - "die Kamera geht noch nicht mit raus". Zoom und Blickwinkel
+      // bleiben, wie der Spieler sie gerade eingestellt hat; nur das Ziel
+      // wandert mit, damit es kein ueberraschender Sprung wird.
+      goal.target.set(groundPoint.x, 0.9, groundPoint.z);
       say('Lynn ist unterwegs.');
     }
   }
