@@ -571,7 +571,7 @@
        und eine alte Fassung als "immer noch kaputt" durchging. Bei jeder
        Aenderung hochzaehlen. -->
   <div class="mark">
-    <b>Fleur-Blache’s Blumen</b><span>TESTVERSION &middot; V63</span>
+    <b>Fleur-Blache’s Blumen</b><span>TESTVERSION &middot; V64</span>
     <em id="premiumBadge" class="premium-badge" hidden>👑 Premium</em>
   </div>
   <div class="hud-right">
@@ -6402,6 +6402,31 @@
     if (!el.shopSheet.hidden) renderShop();
   }
 
+  // Lynns Weg zur Vollversion, ohne Geld und ohne eigenen Server: die
+  // Bedrohungslage ist "eine Person soll gratis Premium bekommen", nicht
+  // "vor einem gezielten Angriff schuetzen" - dafuer reicht ein Code, dessen
+  // SHA-256-Hash im Quelltext steht statt des Codes selbst. Wer die App
+  // oeffentlich verkauft, kann trotzdem beruhigt sein: den Klartext findet
+  // niemand nur durch Draufschauen.
+  var FREISCHALTCODE_HASH = '7384a458f48699b0cdb7de82d43366d25048ce18091d68e302b751f7d36ac884';
+
+  function pruefeFreischaltcode(eingabe) {
+    var text = (eingabe || '').trim().toUpperCase();
+    if (!text) return;
+    var bytes = new TextEncoder().encode(text);
+    crypto.subtle.digest('SHA-256', bytes).then(function (buf) {
+      var hex = Array.prototype.map.call(new Uint8Array(buf), function (b) {
+        return (b < 16 ? '0' : '') + b.toString(16);
+      }).join('');
+      if (hex !== FREISCHALTCODE_HASH) { say('Dieser Code ist nicht gültig.'); return; }
+      if (premium) { say('Premium ist schon freigeschaltet.'); return; }
+      kaufePremium();
+      setCoins(coins + 2000);
+      say('Code angenommen – viel Spass! Premium ist frei, dazu 2000 Münzen.');
+      speichereSpiel();
+    });
+  }
+
   // -------------------------------------------------------- Gross-Pakete
   // 20 Stück einer Art auf einen Schlag - eine Art je Kategorie, und zwar
   // genau die, die ohnehin schon frei ist. So bleibt es eine Bequemlichkeit
@@ -6608,17 +6633,46 @@
 
   // Muenzpakete. Im fertigen Spiel echte Kaeufe, hier eine Schaltflaeche - der
   // Anschluss an StoreKit kommt beim iOS-Build dazu.
+  // "native" ist die kurze Produkt-ID, die die iPhone-App und Commerce.swift
+  // kennen (dort als com.sebastianbuergy.lynnsplants.<native>). In der
+  // Web-Version (kein window.LynnsNative) bleiben Muenzen wie bisher eine
+  // Attrappe - siehe kaufeMuenzpaket().
   var COIN_PACKS = [
-    { id: 'p1', name: 'Handvoll Münzen', coins: 250, preis: 'CHF 1.—' },
-    { id: 'p2', name: 'Beutel Münzen', coins: 800, preis: 'CHF 3.—' },
-    { id: 'p3', name: 'Kiste Münzen', coins: 2200, preis: 'CHF 7.—' },
+    { id: 'p1', name: 'Handvoll Münzen', coins: 250, preis: 'CHF 1.—', native: 'coins250' },
+    { id: 'p2', name: 'Beutel Münzen', coins: 800, preis: 'CHF 3.—', native: 'coins800' },
+    { id: 'p3', name: 'Kiste Münzen', coins: 2200, preis: 'CHF 7.—', native: 'coins2200' },
     // Kein Muenzpaket im eigentlichen Sinn - die 60 Muenzen sind nur ein
     // Dankeschoen, der Punkt ist die Tasse Kaffee fuer den Entwickler.
     // Bewusst ein schlechter Muenzen-Kurs, damit niemand das als guenstigsten
     // Weg zu Muenzen entdeckt statt als das, was es ist.
     { id: 'p-kaffee', name: 'Kaffee für den Entwickler', coins: 60, preis: 'CHF 2.—', icon: '☕',
+      native: 'coffee',
       note: 'Kein Münzpaket, einfach ein Dankeschön – 60 Münzen als Beigabe · CHF 2.—' }
   ];
+
+  // In der App zieht ein Kauf echtes Geld ueber Apple - window.LynnsNative
+  // (native-runtime.js) ist dann vorhanden und uebernimmt StoreKit; im
+  // reinen Browser (der GitHub-Pages-Link) gibt es das nicht, dort bleiben
+  // Muenzenpakete die bisherige kostenlose Demo-Zeile.
+  function kaufeMuenzpaket(pack) {
+    if (window.LynnsNative && window.LynnsNative.isNative) {
+      say('Kauf wird bei Apple bestätigt …');
+      window.LynnsNative.purchase(pack.native).then(function (ergebnis) {
+        // Der native Kontostand ist nach einem echten Kauf die Wahrheit -
+        // direkt uebernehmen statt selbst draufzuzaehlen, sonst zaehlt eine
+        // spaetere Restore/Ad-Gutschrift doppelt.
+        if (ergebnis && ergebnis.wallet) setCoins(ergebnis.wallet.balance);
+        say(pack.name + ' gutgeschrieben: ' + pack.coins + ' Münzen.');
+        speichereSpiel();
+        renderStore();
+      }).catch(function (fehler) {
+        say((fehler && fehler.message) || 'Kauf nicht abgeschlossen.');
+      });
+      return;
+    }
+    setCoins(coins + pack.coins);
+    say(pack.name + ' gutgeschrieben: ' + pack.coins + ' Münzen.');
+  }
 
   var bought = {};
   var shopTab = 'plants';
@@ -6866,11 +6920,15 @@
     COIN_PACKS.forEach(function (pack) {
       list.appendChild(offerRow(pack.icon || '🪙', pack.name,
         pack.note || (pack.coins + ' Münzen · ' + pack.preis), 'Kaufen', true,
-        function () {
-          setCoins(coins + pack.coins);
-          say(pack.name + ' gutgeschrieben: ' + pack.coins + ' Münzen.');
-        }));
+        function () { kaufeMuenzpaket(pack); }));
     });
+
+    list.appendChild(offerRow('🔑', 'Code einlösen',
+      'Einen Freischaltcode bekommen? Hier eingeben.', 'Einlösen', true,
+      function () {
+        var eingabe = window.prompt('Code eingeben:');
+        if (eingabe) pruefeFreischaltcode(eingabe);
+      }));
 
     renderInAppPflanzen(list);
     renderInAppDeko(list);
@@ -7853,15 +7911,28 @@
   }
 
   function speichereSpiel() {
+    var stand = sammleSpielstand();
+    var json = JSON.stringify(stand);
     try {
-      localStorage.setItem(SPEICHER_SCHLUESSEL, JSON.stringify(sammleSpielstand()));
+      localStorage.setItem(SPEICHER_SCHLUESSEL, json);
     } catch (e) {
       // Privater Modus, voller Speicher o.ae. - Fortschritt bleibt dann nur
       // fuer diese Sitzung erhalten, das Spiel darf deshalb nicht abstuerzen.
     }
+    // In der App zusaetzlich im Schluesselbund sichern (Commerce.swift,
+    // saveGame) - uebersteht einen Neustart zuverlaessiger als localStorage
+    // im WKWebView, und ist derselbe Ort, an dem echte Kaeufe verbucht
+    // werden. Auf der reinen Web-Version ist das ein no-op.
+    if (window.LynnsNative) window.LynnsNative.saveGame(json).catch(function () {});
   }
 
   function ladeSpielstand() {
+    if (window.LynnsNative && window.LynnsNative.isNative) {
+      var boot = window.__LYNNS_NATIVE_BOOTSTRAP__;
+      if (boot && boot.game) {
+        try { return JSON.parse(boot.game); } catch (e) { /* faellt unten durch */ }
+      }
+    }
     try {
       var roh = localStorage.getItem(SPEICHER_SCHLUESSEL);
       return roh ? JSON.parse(roh) : null;
@@ -7874,9 +7945,30 @@
   var adsDatumHeute = heutigesDatum();
 
   function wendeSpielstandAn(stand) {
-    if (!stand) { setCoins(coins); zeigeLevel(); return; }
+    // Der native Kontostand (Schluesselbund, Commerce.swift) ist massgeblich,
+    // sobald er existiert: ein echter Kauf oder eine Werbegutschrift aendert
+    // dort sofort den Saldo, ohne den mitgespeicherten Spielstand-JSON-Blob
+    // neu zu schreiben - der bliebe sonst auf dem alten Stand.
+    var nativeSaldo = null;
+    if (window.LynnsNative && window.LynnsNative.isNative &&
+        window.__LYNNS_NATIVE_BOOTSTRAP__ && window.__LYNNS_NATIVE_BOOTSTRAP__.wallet) {
+      nativeSaldo = window.__LYNNS_NATIVE_BOOTSTRAP__.wallet.balance;
+    }
+
+    if (!stand) {
+      // Wirklich frischer Stand (auch nativ noch nie gespeichert) - startet
+      // wie die Web-Version bei 1000, nicht beim Swift-seitigen
+      // LocalLedger-Standardwert (325, ein Erbe der alten 2D-App). Der
+      // gleich folgende speichereSpiel()-Aufruf schreibt 1000 in den
+      // Schluesselbund und macht es dort zum neuen Ausgangswert.
+      setCoins(coins);
+      zeigeLevel();
+      speichereSpiel();
+      return;
+    }
 
     coins = typeof stand.coins === 'number' ? stand.coins : coins;
+    if (nativeSaldo !== null) coins = nativeSaldo;
     xp = stand.xp || 0;
     level = stufeFuer(xp);
     if (stand.bought) bought = stand.bought;
@@ -8021,14 +8113,26 @@
     };
   };
 
-  wendeSpielstandAn(ladeSpielstand());
-  setInterval(speichereSpiel, 8000);
-  window.addEventListener('pagehide', speichereSpiel);
-  document.addEventListener('visibilitychange', function () {
-    if (document.hidden) speichereSpiel();
-  });
+  function starteSpiel() {
+    wendeSpielstandAn(ladeSpielstand());
+    setInterval(speichereSpiel, 8000);
+    window.addEventListener('pagehide', speichereSpiel);
+    document.addEventListener('visibilitychange', function () {
+      if (document.hidden) speichereSpiel();
+    });
+    requestAnimationFrame(frame);
+  }
 
-  requestAnimationFrame(frame);
+  // In der App muss erst die native Bruecke antworten (Schluesselbund-
+  // Spielstand, echter Muenzsaldo), bevor irgendetwas restauriert wird -
+  // sonst wuerde kurz der Web-Standardstand aufblitzen. native-runtime.js
+  // feuert 'lynns-native-ready', sobald das erledigt ist (siehe launchGame()
+  // dort - das Spiel selbst braucht kein injiziertes app.js mehr).
+  if (window.LynnsNative && window.LynnsNative.isNative && !window.__LYNNS_NATIVE_BOOTSTRAP__) {
+    window.addEventListener('lynns-native-ready', starteSpiel, { once: true });
+  } else {
+    starteSpiel();
+  }
 })();
 </script>
 </body>
