@@ -8018,6 +8018,7 @@
       bought: bought, unlockedSets: unlockedSets, gewaehlt: gewaehlt,
       outdoor: outdoor, meadowBought: meadowBought,
       adsGesehen: adsGesehen, adsDatum: adsDatumHeute, ledMode: ledMode,
+      bonusDatum: bonusDatumLetztes,
       einheiten: einheiten, samen: samen
     };
   }
@@ -8064,6 +8065,22 @@
   // Nur fuer den taeglichen Werbe-Limit-Reset gebraucht.
   var adsDatumHeute = heutigesDatum();
 
+  // Taeglicher Login-Bonus: beim ersten Oeffnen an einem neuen Kalendertag
+  // gibt es 200 Muenzen geschenkt - unabhaengig vom Werbe-Limit oben, darum
+  // ein eigenes Datumsfeld statt adsDatum mitzubenutzen. Zaehlt auch am
+  // allerersten Start mit (siehe beide Aufrufstellen in wendeSpielstandAn),
+  // einfachste Regel: "jeder neue Tag bringt 200", keine Sonderbehandlung
+  // fuer Tag eins.
+  var TAGESBONUS = 200;
+  var bonusDatumLetztes = null;
+
+  function pruefeTagesbonus(letztesDatum) {
+    if (letztesDatum === adsDatumHeute) { bonusDatumLetztes = letztesDatum; return; }
+    bonusDatumLetztes = adsDatumHeute;
+    coins += TAGESBONUS;
+    say('Willkommen zurück! Tagesbonus: +' + TAGESBONUS + ' Münzen.');
+  }
+
   function wendeSpielstandAn(stand) {
     // Der native Kontostand (Schluesselbund, Commerce.swift) ist massgeblich,
     // sobald er existiert: ein echter Kauf oder eine Werbegutschrift aendert
@@ -8082,6 +8099,7 @@
       // LocalLedger-Standardwert (325, ein Erbe der alten 2D-App). Der
       // gleich folgende speichereSpiel()-Aufruf schreibt 1000 in den
       // Schluesselbund und macht es dort zum neuen Ausgangswert.
+      pruefeTagesbonus(null);
       setCoins(coins);
       zeigeLevel();
       speichereSpiel();
@@ -8215,6 +8233,7 @@
     // Werbe-Tageslimit: nur uebernehmen, wenn seit dem Speichern noch
     // derselbe Kalendertag ist, sonst faengt das Limit frisch an.
     adsGesehen = (stand.adsDatum === adsDatumHeute) ? (stand.adsGesehen || 0) : 0;
+    pruefeTagesbonus(stand.bonusDatum);
 
     zeigeLevel();
     setCoins(coins);
@@ -8230,9 +8249,10 @@
     return {
       coins: coins, premium: premium, xp: xp, bought: bought,
       gewaehlt: gewaehlt, outdoor: outdoor, meadowBought: meadowBought,
-      adsGesehen: adsGesehen
+      adsGesehen: adsGesehen, bonusDatumLetztes: bonusDatumLetztes
     };
   };
+  window.__inspect.pruefeTagesbonus = pruefeTagesbonus;
 
   var spielGestartet = false;
 
