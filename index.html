@@ -571,7 +571,7 @@
        und eine alte Fassung als "immer noch kaputt" durchging. Bei jeder
        Aenderung hochzaehlen. -->
   <div class="mark">
-    <b>Fleur-Blache’s Blumen</b><span>TESTVERSION &middot; V66</span>
+    <b>Fleur-Blache’s Blumen</b><span>TESTVERSION &middot; V67</span>
     <em id="premiumBadge" class="premium-badge" hidden>👑 Premium</em>
   </div>
   <div class="hud-right">
@@ -7022,14 +7022,13 @@
     premiumRow.classList.add('offer-cash');
     list.appendChild(premiumRow);
 
-    list.appendChild(offerRow(
-      '🎬', 'Werbevideo ansehen',
-      adsGesehen >= AD_LIMIT
-        ? 'Für heute aufgebraucht – komm später wieder.'
-        : '+' + AD_LOHN + ' Münzen · noch ' + (AD_LIMIT - adsGesehen) + '× heute.',
-      adsGesehen >= AD_LIMIT ? 'Aufgebraucht' : 'Ansehen',
-      adsGesehen < AD_LIMIT && !adLaeuft,
-      zeigeWerbung, true));
+    // Die Werbevideo-Zeile ist bewusst draussen: sie zeigte nie eine echte
+    // Werbung (nur einen 4-Sekunden-Timer), brachte also keine Einnahmen,
+    // gab aber taeglich bis zu 200 Muenzen gratis weg - reiner Verlust
+    // gegenueber den echten Muenzpaketen. zeigeWerbung()/AD_LOHN/AD_LIMIT
+    // bleiben unten stehen, um sie mit einem echten Werbenetzwerk (z.B.
+    // AdsController.swift/AdMob, siehe rewardedAd() in native-runtime.js)
+    // wieder anzuschliessen, statt das hier neu zu bauen.
 
     abschnitt(list, 'Münzenpakete');
     COIN_PACKS.forEach(function (pack) {
