@@ -571,12 +571,12 @@
        und eine alte Fassung als "immer noch kaputt" durchging. Bei jeder
        Aenderung hochzaehlen. -->
   <div class="mark">
-    <b>Fleur-Blache’s Blumen</b><span>TESTVERSION &middot; V64</span>
+    <b>Fleur-Blache’s Blumen</b><span>TESTVERSION &middot; V65</span>
     <em id="premiumBadge" class="premium-badge" hidden>👑 Premium</em>
   </div>
   <div class="hud-right">
     <div class="level" id="levelBox"><b id="levelValue">LV 1</b><i><em id="levelFill"></em></i></div>
-    <button class="coins" id="coinBtn" type="button"><i></i><b id="coinValue">1000</b><em>+</em></button>
+    <button class="coins" id="coinBtn" type="button" aria-label="Münzen und Pakete öffnen"><i></i><b id="coinValue">1000</b><em>+</em></button>
   </div>
 </header>
 
@@ -658,6 +658,20 @@
     <p>Wird im fertigen Spiel über den Kaufdialog von Apple abgewickelt.</p>
     <div class="shop-list" id="storeList"></div>
     <button type="button" class="sheet-close" id="storeClose">Schliessen</button>
+  </div>
+</div>
+
+<!-- Eigenes Blatt statt window.prompt(): WKWebView zeigt JS-Dialoge ohne
+     WKUIDelegate gar nicht an - der Knopf haette in der App nichts getan.
+     z-index 31, damit es ueber dem Muenzladen liegt, aus dem es geoeffnet wird. -->
+<div class="sheet" id="codeSheet" hidden style="z-index:31">
+  <div class="sheet-card">
+    <b>Code einlösen</b>
+    <p>Freischaltcode eingeben – Gross- und Kleinschreibung spielt keine Rolle.</p>
+    <input type="text" id="codeInput" autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="Code"
+      style="width:100%;box-sizing:border-box;font:inherit;font-size:18px;padding:12px 14px;border-radius:12px;border:1px solid rgba(27,42,29,.22);margin:6px 0 12px;background:#fff">
+    <button type="button" class="sheet-close" id="codeOk">Einlösen</button>
+    <button type="button" class="sheet-close" id="codeClose">Abbrechen</button>
   </div>
 </div>
 
@@ -4613,6 +4627,10 @@
     potGrid: document.getElementById('potGrid'),
     potFor: document.getElementById('potFor'),
     potClose: document.getElementById('potClose'),
+    codeSheet: document.getElementById('codeSheet'),
+    codeInput: document.getElementById('codeInput'),
+    codeOk: document.getElementById('codeOk'),
+    codeClose: document.getElementById('codeClose'),
     back: document.getElementById('backBtn'),
     shopSheet: document.getElementById('shopSheet'),
     shopCard: document.getElementById('shopCard'),
@@ -6410,14 +6428,77 @@
   // niemand nur durch Draufschauen.
   var FREISCHALTCODE_HASH = '7384a458f48699b0cdb7de82d43366d25048ce18091d68e302b751f7d36ac884';
 
+  function hexVon(bytes) {
+    var hex = '';
+    for (var i = 0; i < bytes.length; i++) hex += (bytes[i] < 16 ? '0' : '') + bytes[i].toString(16);
+    return hex;
+  }
+
+  // Reines JS-SHA-256 als Rueckfall: crypto.subtle gibt es nur in einem
+  // "sicheren Kontext". WebKit zaehlt file:// (so laedt die App das Spiel)
+  // dazu, aber dieser Code ist Lynns Hauptweg zur Vollversion - lieber ein
+  // Rueckfall zu viel als ein Knopf, der stumm nichts tut.
+  function sha256Bytes(msg) {
+    var K = [0x428a2f98, 0x71374491, 0xb5c0fbcf, 0xe9b5dba5, 0x3956c25b, 0x59f111f1, 0x923f82a4, 0xab1c5ed5,
+      0xd807aa98, 0x12835b01, 0x243185be, 0x550c7dc3, 0x72be5d74, 0x80deb1fe, 0x9bdc06a7, 0xc19bf174,
+      0xe49b69c1, 0xefbe4786, 0x0fc19dc6, 0x240ca1cc, 0x2de92c6f, 0x4a7484aa, 0x5cb0a9dc, 0x76f988da,
+      0x983e5152, 0xa831c66d, 0xb00327c8, 0xbf597fc7, 0xc6e00bf3, 0xd5a79147, 0x06ca6351, 0x14292967,
+      0x27b70a85, 0x2e1b2138, 0x4d2c6dfc, 0x53380d13, 0x650a7354, 0x766a0abb, 0x81c2c92e, 0x92722c85,
+      0xa2bfe8a1, 0xa81a664b, 0xc24b8b70, 0xc76c51a3, 0xd192e819, 0xd6990624, 0xf40e3585, 0x106aa070,
+      0x19a4c116, 0x1e376c08, 0x2748774c, 0x34b0bcb5, 0x391c0cb3, 0x4ed8aa4a, 0x5b9cca4f, 0x682e6ff3,
+      0x748f82ee, 0x78a5636f, 0x84c87814, 0x8cc70208, 0x90befffa, 0xa4506ceb, 0xbef9a3f7, 0xc67178f2];
+    var H = [0x6a09e667, 0xbb67ae85, 0x3c6ef372, 0xa54ff53a, 0x510e527f, 0x9b05688c, 0x1f83d9ab, 0x5be0cd19];
+    function rotr(x, n) { return (x >>> n) | (x << (32 - n)); }
+    var l = msg.length;
+    var padded = new Uint8Array(((l + 9 + 63) >> 6) << 6);
+    padded.set(msg);
+    padded[l] = 0x80;
+    var dv = new DataView(padded.buffer);
+    dv.setUint32(padded.length - 4, (l * 8) >>> 0);
+    dv.setUint32(padded.length - 8, Math.floor(l / 0x20000000));
+    var w = new Uint32Array(64);
+    for (var off = 0; off < padded.length; off += 64) {
+      var i;
+      for (i = 0; i < 16; i++) w[i] = dv.getUint32(off + i * 4);
+      for (i = 16; i < 64; i++) {
+        var s0 = rotr(w[i - 15], 7) ^ rotr(w[i - 15], 18) ^ (w[i - 15] >>> 3);
+        var s1 = rotr(w[i - 2], 17) ^ rotr(w[i - 2], 19) ^ (w[i - 2] >>> 10);
+        w[i] = (w[i - 16] + s0 + w[i - 7] + s1) >>> 0;
+      }
+      var a = H[0], b = H[1], c = H[2], d = H[3], e = H[4], f = H[5], g = H[6], h = H[7];
+      for (i = 0; i < 64; i++) {
+        var S1 = rotr(e, 6) ^ rotr(e, 11) ^ rotr(e, 25);
+        var ch = (e & f) ^ (~e & g);
+        var t1 = (h + S1 + ch + K[i] + w[i]) >>> 0;
+        var S0 = rotr(a, 2) ^ rotr(a, 13) ^ rotr(a, 22);
+        var maj = (a & b) ^ (a & c) ^ (b & c);
+        var t2 = (S0 + maj) >>> 0;
+        h = g; g = f; f = e; e = (d + t1) >>> 0;
+        d = c; c = b; b = a; a = (t1 + t2) >>> 0;
+      }
+      H[0] = (H[0] + a) >>> 0; H[1] = (H[1] + b) >>> 0; H[2] = (H[2] + c) >>> 0; H[3] = (H[3] + d) >>> 0;
+      H[4] = (H[4] + e) >>> 0; H[5] = (H[5] + f) >>> 0; H[6] = (H[6] + g) >>> 0; H[7] = (H[7] + h) >>> 0;
+    }
+    var out = new Uint8Array(32);
+    var ov = new DataView(out.buffer);
+    for (var k = 0; k < 8; k++) ov.setUint32(k * 4, H[k]);
+    return out;
+  }
+
+  function sha256Hex(text) {
+    var bytes = new TextEncoder().encode(text);
+    if (window.crypto && window.crypto.subtle && window.crypto.subtle.digest) {
+      return window.crypto.subtle.digest('SHA-256', bytes)
+        .then(function (buf) { return hexVon(new Uint8Array(buf)); })
+        .catch(function () { return hexVon(sha256Bytes(bytes)); });
+    }
+    return Promise.resolve(hexVon(sha256Bytes(bytes)));
+  }
+
   function pruefeFreischaltcode(eingabe) {
     var text = (eingabe || '').trim().toUpperCase();
     if (!text) return;
-    var bytes = new TextEncoder().encode(text);
-    crypto.subtle.digest('SHA-256', bytes).then(function (buf) {
-      var hex = Array.prototype.map.call(new Uint8Array(buf), function (b) {
-        return (b < 16 ? '0' : '') + b.toString(16);
-      }).join('');
+    sha256Hex(text).then(function (hex) {
       if (hex !== FREISCHALTCODE_HASH) { say('Dieser Code ist nicht gültig.'); return; }
       if (premium) { say('Premium ist schon freigeschaltet.'); return; }
       kaufePremium();
@@ -6426,6 +6507,26 @@
       speichereSpiel();
     });
   }
+
+  function zeigeCodeSheet() {
+    el.codeInput.value = '';
+    el.codeSheet.hidden = false;
+    setTimeout(function () { el.codeInput.focus(); }, 60);
+  }
+  el.codeOk.addEventListener('click', function () {
+    var eingabe = el.codeInput.value;
+    el.codeSheet.hidden = true;
+    pruefeFreischaltcode(eingabe);
+  });
+  el.codeInput.addEventListener('keydown', function (e) {
+    if (e.key === 'Enter') { e.preventDefault(); el.codeOk.click(); }
+  });
+  el.codeClose.addEventListener('click', function () { el.codeSheet.hidden = true; });
+  el.codeSheet.addEventListener('click', function (e) {
+    if (e.target === el.codeSheet) el.codeSheet.hidden = true;
+  });
+  window.__inspect.sha256Hex = sha256Hex;
+  window.__inspect.sha256Bytes = sha256Bytes;
 
   // -------------------------------------------------------- Gross-Pakete
   // 20 Stück einer Art auf einen Schlag - eine Art je Kategorie, und zwar
@@ -6654,14 +6755,28 @@
   // (native-runtime.js) ist dann vorhanden und uebernimmt StoreKit; im
   // reinen Browser (der GitHub-Pages-Link) gibt es das nicht, dort bleiben
   // Muenzenpakete die bisherige kostenlose Demo-Zeile.
+  // Der Saldo, den der native Schluesselbund zuletzt nachweislich hatte (nach
+  // bootstrap, nach jedem erfolgreichen saveGame, nach jedem Kauf). Nur die
+  // DIFFERENZ dazu wird bei einer nativen Gutschrift uebernommen - siehe den
+  // 'lynns-native-wallet'-Listener ganz unten.
+  var letzterNativerSaldo = null;
+
   function kaufeMuenzpaket(pack) {
     if (window.LynnsNative && window.LynnsNative.isNative) {
       say('Kauf wird bei Apple bestätigt …');
+      // Erst den aktuellen Stand in den Schluesselbund schreiben - die Bruecke
+      // arbeitet Anfragen der Reihe nach ab, also rechnet Apple den Kauf auf
+      // genau die Muenzen drauf, die der Spieler gerade wirklich hat, nicht
+      // auf den bis zu 8 s alten Stand der letzten Autosicherung.
+      speichereSpiel();
       window.LynnsNative.purchase(pack.native).then(function (ergebnis) {
         // Der native Kontostand ist nach einem echten Kauf die Wahrheit -
         // direkt uebernehmen statt selbst draufzuzaehlen, sonst zaehlt eine
         // spaetere Restore/Ad-Gutschrift doppelt.
-        if (ergebnis && ergebnis.wallet) setCoins(ergebnis.wallet.balance);
+        if (ergebnis && ergebnis.wallet && typeof ergebnis.wallet.balance === 'number') {
+          letzterNativerSaldo = ergebnis.wallet.balance;
+          setCoins(ergebnis.wallet.balance);
+        }
         say(pack.name + ' gutgeschrieben: ' + pack.coins + ' Münzen.');
         speichereSpiel();
         renderStore();
@@ -6925,10 +7040,7 @@
 
     list.appendChild(offerRow('🔑', 'Code einlösen',
       'Einen Freischaltcode bekommen? Hier eingeben.', 'Einlösen', true,
-      function () {
-        var eingabe = window.prompt('Code eingeben:');
-        if (eingabe) pruefeFreischaltcode(eingabe);
-      }));
+      function () { zeigeCodeSheet(); }));
 
     renderInAppPflanzen(list);
     renderInAppDeko(list);
@@ -7923,7 +8035,15 @@
     // saveGame) - uebersteht einen Neustart zuverlaessiger als localStorage
     // im WKWebView, und ist derselbe Ort, an dem echte Kaeufe verbucht
     // werden. Auf der reinen Web-Version ist das ein no-op.
-    if (window.LynnsNative) window.LynnsNative.saveGame(json).catch(function () {});
+    if (window.LynnsNative) {
+      window.LynnsNative.saveGame(json).then(function (antwort) {
+        // Erfolgreich gesichert heisst: der Schluesselbund traegt jetzt genau
+        // unsere Muenzen - neue Vergleichsbasis fuer spaetere Gutschriften.
+        if (antwort && antwort.wallet && typeof antwort.wallet.balance === 'number') {
+          letzterNativerSaldo = antwort.wallet.balance;
+        }
+      }).catch(function () {});
+    }
   }
 
   function ladeSpielstand() {
@@ -7954,6 +8074,7 @@
         window.__LYNNS_NATIVE_BOOTSTRAP__ && window.__LYNNS_NATIVE_BOOTSTRAP__.wallet) {
       nativeSaldo = window.__LYNNS_NATIVE_BOOTSTRAP__.wallet.balance;
     }
+    if (nativeSaldo !== null) letzterNativerSaldo = nativeSaldo;
 
     if (!stand) {
       // Wirklich frischer Stand (auch nativ noch nie gespeichert) - startet
@@ -8113,7 +8234,10 @@
     };
   };
 
+  var spielGestartet = false;
+
   function starteSpiel() {
+    spielGestartet = true;
     wendeSpielstandAn(ladeSpielstand());
     setInterval(speichereSpiel, 8000);
     window.addEventListener('pagehide', speichereSpiel);
@@ -8133,6 +8257,35 @@
   } else {
     starteSpiel();
   }
+
+  // Gutschriften, die NICHT ueber kaufeMuenzpaket laufen: ein Kauf mit
+  // "Fragen vor Kauf", der spaeter von den Eltern freigegeben wird, eine
+  // beim App-Start nachgelieferte, vorher abgebrochene Transaktion, ein
+  // Restore. Commerce.swift bucht sie in den Schluesselbund und die Bruecke
+  // meldet den frischen Saldo als 'lynns-native-wallet'. Ohne dieses Ohr
+  // wuerde die naechste Autosicherung (alle 8 s) den alten Spielstand mit
+  // passender Revision drueberschreiben - bezahlte Muenzen waeren weg. Nur
+  // die DIFFERENZ zum zuletzt bekannten Saldo wird uebernommen, damit lokal
+  // seit der letzten Sicherung eingenommene/ausgegebene Muenzen bleiben.
+  window.addEventListener('lynns-native-wallet', function (e) {
+    var snap = e && e.detail;
+    if (!snap || !snap.wallet || typeof snap.wallet.balance !== 'number') return;
+    if (!spielGestartet) {
+      // Noch vor dem Spielstart (Nachlieferung direkt nach bootstrap): die
+      // Momentaufnahme erneuern, dann liest wendeSpielstandAn den frischen
+      // Saldo statt des veralteten.
+      window.__LYNNS_NATIVE_BOOTSTRAP__ = snap;
+      return;
+    }
+    if (letzterNativerSaldo === null) { letzterNativerSaldo = snap.wallet.balance; return; }
+    var differenz = snap.wallet.balance - letzterNativerSaldo;
+    letzterNativerSaldo = snap.wallet.balance;
+    if (differenz > 0) {
+      setCoins(coins + differenz);
+      say('+' + differenz + ' Münzen gutgeschrieben.');
+      speichereSpiel();
+    }
+  });
 })();
 </script>
 </body>
