@@ -571,7 +571,7 @@
        und eine alte Fassung als "immer noch kaputt" durchging. Bei jeder
        Aenderung hochzaehlen. -->
   <div class="mark">
-    <b>Fleur-Blache’s Blumen</b><span>TESTVERSION &middot; V62</span>
+    <b>Fleur-Blache’s Blumen</b><span>TESTVERSION &middot; V63</span>
     <em id="premiumBadge" class="premium-badge" hidden>👑 Premium</em>
   </div>
   <div class="hud-right">
@@ -7791,8 +7791,243 @@
     requestAnimationFrame(frame);
   }
 
-  setCoins(coins);
-  zeigeLevel();
+  // ==================================================== Speicherstand (V63)
+  // Bisher gab es ueberhaupt keine Persistenz - jeder Neustart begann mit
+  // 1000 Muenzen und einem leeren Laden. Statt jede einzelne Kauf-/Aktions-
+  // stelle im ganzen Skript zu instrumentieren, wird der komplette relevante
+  // Zustand periodisch in einem Rutsch eingesammelt (sammleSpielstand) und
+  // beim Start ueber dieselben Funktionen wiederhergestellt, die auch ein
+  // echter Kauf benutzt (fillSlot, deliverUnit, setzeHolz, openGreenhouse
+  // usw.) - keine Kaufkosten werden dabei erneut abgezogen.
+  var SPEICHER_SCHLUESSEL = 'fleurblanches-blumen-save-v1';
+
+  function heutigesDatum() {
+    var d = new Date();
+    return d.getFullYear() + '-' + (d.getMonth() + 1) + '-' + d.getDate();
+  }
+
+  function sammleSpielstand() {
+    var einheiten = [];
+    shelves.forEach(function (unit) {
+      // Auch ein noch nicht gekauftes Stueck aufnehmen, wenn nur seine
+      // Holzwahl schon feststeht ("funktioniert schon vor dem Kauf") -
+      // sonst ginge genau diese Wahl beim naechsten Laden wieder verloren.
+      if (!unit.built && !unit.ordered && !unit.holzCustom) return;
+      var eintrag = {
+        label: unit.label,
+        built: !!unit.built,
+        ordered: !!unit.ordered,
+        x: unit.group.position.x,
+        z: unit.group.position.z,
+        rotY: unit.group.rotation.y,
+        holzId: unit.holzId,
+        holzCustom: !!unit.holzCustom,
+        slots: []
+      };
+      unit.slots.forEach(function (slot, i) {
+        if (!slot.plant || slot.saatgut || !slot.plant.userData.pick) return;
+        var info = slot.plant.userData.pick;
+        eintrag.slots.push({
+          i: i, species: info.species.name, water: info.water,
+          dead: !!info.dead, pot: info.pot, price: info.price
+        });
+      });
+      einheiten.push(eintrag);
+    });
+
+    var samen = saatgutListe.map(function (s) {
+      return {
+        label: s.shelf.label, i: s.shelf.slots.indexOf(s.slot),
+        species: s.species.name, start: s.start, dauer: s.dauer
+      };
+    });
+
+    return {
+      v: 1,
+      coins: coins, premium: premium, xp: xp,
+      bought: bought, unlockedSets: unlockedSets, gewaehlt: gewaehlt,
+      outdoor: outdoor, meadowBought: meadowBought,
+      adsGesehen: adsGesehen, adsDatum: adsDatumHeute, ledMode: ledMode,
+      einheiten: einheiten, samen: samen
+    };
+  }
+
+  function speichereSpiel() {
+    try {
+      localStorage.setItem(SPEICHER_SCHLUESSEL, JSON.stringify(sammleSpielstand()));
+    } catch (e) {
+      // Privater Modus, voller Speicher o.ae. - Fortschritt bleibt dann nur
+      // fuer diese Sitzung erhalten, das Spiel darf deshalb nicht abstuerzen.
+    }
+  }
+
+  function ladeSpielstand() {
+    try {
+      var roh = localStorage.getItem(SPEICHER_SCHLUESSEL);
+      return roh ? JSON.parse(roh) : null;
+    } catch (e) {
+      return null;
+    }
+  }
+
+  // Nur fuer den taeglichen Werbe-Limit-Reset gebraucht.
+  var adsDatumHeute = heutigesDatum();
+
+  function wendeSpielstandAn(stand) {
+    if (!stand) { setCoins(coins); zeigeLevel(); return; }
+
+    coins = typeof stand.coins === 'number' ? stand.coins : coins;
+    xp = stand.xp || 0;
+    level = stufeFuer(xp);
+    if (stand.bought) bought = stand.bought;
+    if (stand.unlockedSets) unlockedSets = stand.unlockedSets;
+    unlockedSets.basis = true;
+    if (stand.gewaehlt) gewaehlt = stand.gewaehlt;
+    ledMode = !!stand.ledMode;
+
+    if (stand.premium) {
+      premium = true;
+      el.premiumBadge.hidden = false;
+    }
+
+    // Raeume zuerst - Feld vor Aufzuchthaus, siehe Kommentar in
+    // openGreenhouse() ("if (!meadowBought) gartenWeg(...)"); ausserdem
+    // haengen die Anzuchtbeete/Feldbeete als shelves-Eintraege erst nach
+    // diesem Aufruf ueberhaupt in `shelves`, muessen also vor der
+    // Moebel-Wiederherstellung unten entstehen.
+    if (stand.meadowBought) openMeadow();
+    if (stand.outdoor) openGreenhouse();
+
+    // Personal wieder einstellen.
+    PERSONAL.forEach(function (p) {
+      if (bought['personal-' + p.id]) stelleEin(p.id);
+    });
+
+    // Gekaufte Deko wieder aufstellen - dieselbe place()-Funktion wie beim
+    // echten Kauf, "meadow-unused" ausgenommen (kein echtes Deko-Item).
+    DECOR.forEach(function (item) {
+      if (item.cat !== 'none' && bought[item.id]) item.place();
+    });
+
+    // Holzwahl je Einzelstueck VOR der globalen Farbe anwenden - sonst
+    // uebermalt setzeHolz() unten jedes Regal, weil holzCustom zu dem
+    // Zeitpunkt noch ueberall false waere (derselbe Fehler wie der V60-Bug).
+    (stand.einheiten || []).forEach(function (e) {
+      if (!e.holzId || !e.holzCustom) return;
+      var unit = shelves.filter(function (u) { return u.label === e.label; })[0];
+      if (!unit || !unit.holzMat) return;
+      unit.holzId = e.holzId;
+      unit.holzCustom = true;
+      setSurface(unit.holzMat, 'holz-' + e.holzId, 2, 2);
+    });
+
+    // Globale Ausfuehrungen anwenden - faerbt automatisch nur die Regale,
+    // die gerade NICHT individuell umgestellt wurden (siehe setzeHolz).
+    setzeHolz(gewaehlt.holz);
+    setzeWand(gewaehlt.wand);
+    setzeBoden(gewaehlt.boden);
+    setzeTeppich(gewaehlt.teppich);
+
+    // Moebel: Position/Drehung/Inhalt je Regal, Tisch, Wandbrett und Beet.
+    (stand.einheiten || []).forEach(function (e) {
+      var unit = shelves.filter(function (u) { return u.label === e.label; })[0];
+      if (!unit) return;
+      if (e.built) {
+        if (!unit.bed) {
+          unit.group.visible = true;
+          unit.group.scale.setScalar(1);
+          unit.group.position.set(e.x, 0, e.z);
+          unit.group.rotation.y = e.rotY || 0;
+          unit.built = true;
+          unit.ordered = false;
+          if (!unit.obstacle) {
+            unit.obstacle = { x: 0, z: 0, r: 1.2, active: true };
+            OBSTACLES.push(unit.obstacle);
+          }
+          unit.obstacle.x = unit.group.position.x;
+          unit.obstacle.z = unit.group.position.z;
+          unit.obstacle.active = true;
+          seatUnit(unit);
+        }
+        (e.slots || []).forEach(function (se) {
+          var slot = unit.slots[se.i];
+          if (!slot || slot.plant) return;
+          var species = artNachName(se.species);
+          var plant = fillSlot(unit, slot, species);
+          var info = plant.userData.pick;
+          info.water = se.water;
+          if (se.dead) info.dead = true;
+          if (se.pot) {
+            info.pot = se.pot;
+            info.price = se.price;
+            var potDef = POTS.filter(function (p) { return p.id === se.pot; })[0];
+            if (!setPlantPot(plant, se.pot) && potDef) {
+              plant.userData.potMats.forEach(function (m) { m.color.set(potDef.colour); });
+            }
+            if (potDef) plant.scale.setScalar(plant.userData.baseScale * potDef.scale);
+          }
+        });
+      } else if (e.ordered) {
+        deliverUnit(unit, unit.label);
+      }
+    });
+
+    // Samen weiterwachsen lassen - start/dauer bleiben wie gespeichert, der
+    // naechste updateSaatgut()-Tick berechnet den Fortschritt aus der echten
+    // vergangenen Zeit, auch wenn das Spiel zwischendurch geschlossen war.
+    (stand.samen || []).forEach(function (s) {
+      var unit = shelves.filter(function (u) { return u.label === s.label; })[0];
+      if (!unit) return;
+      var slot = unit.slots[s.i];
+      if (!slot || slot.plant) return;
+      var species = artNachName(s.species);
+      if (slot.room === undefined) seatSlot(unit, slot);
+      var want = Math.min(PLANT_HEIGHT[species.style] || 0.46, (slot.room || 0.9) - 0.04);
+      var zielSkala = (want / 0.46) * (0.94 + Math.random() * 0.12);
+      var setzling = buildPlant(species, zielSkala);
+      if (slot.spin === undefined) slot.spin = Math.random() * Math.PI * 2;
+      setzling.rotation.y = slot.spin;
+      setzling.position.set(slot.x, slot.y, slot.z);
+      var fortschritt = Math.min(1, (Date.now() - s.start) / s.dauer);
+      setzling.scale.setScalar(zielSkala * (0.05 + fortschritt * 0.95));
+      unit.group.add(setzling);
+      slot.plant = setzling;
+      slot.saatgut = true;
+      saatgutListe.push({
+        plant: setzling, shelf: unit, slot: slot, species: species,
+        zielSkala: zielSkala, start: s.start, dauer: s.dauer
+      });
+    });
+
+    // Werbe-Tageslimit: nur uebernehmen, wenn seit dem Speichern noch
+    // derselbe Kalendertag ist, sonst faengt das Limit frisch an.
+    adsGesehen = (stand.adsDatum === adsDatumHeute) ? (stand.adsGesehen || 0) : 0;
+
+    zeigeLevel();
+    setCoins(coins);
+  }
+
+  window.__inspect.startPlacing = startPlacing;
+  window.__inspect.confirmPlacing = confirmPlacing;
+  window.__inspect.wendeSpielstandAn = wendeSpielstandAn;
+  window.__inspect.speichereSpiel = speichereSpiel;
+  window.__inspect.ladeSpielstand = ladeSpielstand;
+  window.__inspect.sammleSpielstand = sammleSpielstand;
+  window.__inspect.zustand = function () {
+    return {
+      coins: coins, premium: premium, xp: xp, bought: bought,
+      gewaehlt: gewaehlt, outdoor: outdoor, meadowBought: meadowBought,
+      adsGesehen: adsGesehen
+    };
+  };
+
+  wendeSpielstandAn(ladeSpielstand());
+  setInterval(speichereSpiel, 8000);
+  window.addEventListener('pagehide', speichereSpiel);
+  document.addEventListener('visibilitychange', function () {
+    if (document.hidden) speichereSpiel();
+  });
+
   requestAnimationFrame(frame);
 })();
 </script>
